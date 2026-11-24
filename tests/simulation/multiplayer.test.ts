@@ -56,8 +56,7 @@ describe.each([1, 2, 3])('full rooms on mixed connections (seed %i)', (seed) => 
   it('8 reaction players, timed fairly whatever their connection and clock', async () => {
     const w = virtualWorld(seed);
     await w.run(async () => {
-      const noLoss = mix(8).map((l) => ({ ...l, loss: 0 }));
-      const t = await openTable(w, 'reaction', noLoss, 4);
+      const t = await openTable(w, 'reaction', mix(8), 4);
       await t.start();
       const recorded = t.phones.map(() => [] as number[]);
       const watch = t.phones.map(async (p, i) => {
@@ -272,10 +271,8 @@ describe.each([1, 2, 3])('timing (seed %i)', (seed) => {
   });
 });
 
-// Problems the simulation found. `it.fails` passes while the problem exists and fails once it is fixed:
-// then turn it into a normal `it`.
-describe('known problems', () => {
-  it.fails('GO appears with the TV on a very slow connection', async () => {
+describe('slow connections and lost messages', () => {
+  it('GO appears with the TV on a very slow connection', async () => {
     expect(await goDelays(links.slow, 1)).toBeLessThan(120);
   });
   // Delivers the first request to the server if `arrives`, but never the reply.
@@ -295,7 +292,7 @@ describe('known problems', () => {
       },
     };
   }
-  it.fails.each([
+  it.each([
     ['in a room with space', 12],
     ['for the last seat', 1],
   ])('a player whose join reply was lost can tap Join again, %s', async (_label, spaces) => {
@@ -314,23 +311,20 @@ describe('known problems', () => {
       }
     });
   });
-  it.fails('a reaction tap that was lost and tapped again keeps its first time', async () => {
-    const w = virtualWorld(24);
-    await w.run(async () => {
-      const t = await openTable(w, 'reaction', [links.wifi, links.wifi], 1);
-      await t.start();
-      const p = t.phones[0];
-      await p.until(() => p.shown.size > 0, 10_000, 'GO');
-      const shown = [...p.shown.values()][0];
-      await w.sleep(200);
-      p.offline = true;
-      expect(await p.command({ action: 'input', round: 1, reactionMs: w.now() - shown })).toBe(false);
-      p.offline = false;
-      await w.sleep(500);
-      expect(await p.command({ action: 'input', round: 1, reactionMs: w.now() - shown })).toBe(true);
-      const recorded = p.me!.reactionMs!;
-      await t.close();
-      expect(recorded).toBeLessThan(300);
-    });
+  it('a reaction tap that is lost is sent again with its first time', async () => {
+    for (const arrives of [false, true]) {
+      const w = virtualWorld(24);
+      await w.run(async () => {
+        const t = await openTable(w, 'reaction', [links.wifi, links.wifi], 1);
+        await t.start();
+        const world = losingFirst(w, (init) => String(init.body).includes('reactionMs'), arrives);
+        (t.phones[0] as { world: unknown }).world = world;
+        const [real] = await Promise.all(t.phones.map((p) => playReaction(p, () => 200)));
+        await settle(t);
+        expect(t.phones[0].me!.reactionMs).toBe(real[1]);
+        await t.close();
+      });
+      vi.restoreAllMocks();
+    }
   });
 });

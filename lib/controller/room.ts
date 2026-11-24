@@ -17,11 +17,33 @@ export const phoneKey='playtogether.phone';
 export function saved(key:string):Seat|null {try{return JSON.parse(localStorage.getItem(key)||'null')}catch{return null}}
 export class RoomError extends Error {constructor(message:string,readonly status:number){super(message)}}
 type ApiPayload={room:Room,code?:string,hostToken?:string,playerId?:string,playerToken?:string,error?:string};
+const lost='Connection lost. Trying again may help.';
 export async function api(path:string,body?:Record<string,unknown>,token?:string):Promise<{room:Room,code?:string,hostToken?:string,playerId?:string,playerToken?:string}> {
- const res=await fetch('/api/rooms'+path,{method:body?'POST':'GET',cache:'no-store',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});
- let data:ApiPayload;try{data=await res.json() as ApiPayload}catch{throw new RoomError('The room service is unavailable. Try again in a moment.',res.status)}
+ // Without a limit, a stalled connection would never reach a retry.
+ const stop=new AbortController(),timer=setTimeout(()=>stop.abort(),5000);
+ try{
+ const res=await fetch('/api/rooms'+path,{signal:stop.signal,method:body?'POST':'GET',cache:'no-store',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});
+ let data:ApiPayload;try{data=await res.json() as ApiPayload}catch(e){if(stop.signal.aborted)throw e;throw new RoomError('The room service is unavailable. Try again in a moment.',res.status)}
  if(!res.ok)throw new RoomError(data.error||'Could not reach the room.',res.status);
  return data;
+ }catch(e){throw e instanceof RoomError?e:new Error(lost)}
+ finally{clearTimeout(timer)}
+}
+// A secret for one join, so repeating it gives back the same seat. randomUUID needs https, which Wi-Fi play lacks.
+const joinKey='playtogether.join';
+function joinId(code:string):string {
+ try{const kept=JSON.parse(sessionStorage.getItem(joinKey)||'null');if(kept?.code===code&&typeof kept.id==='string')return kept.id}catch{}
+ const id=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
+ try{sessionStorage.setItem(joinKey,JSON.stringify({code,id}))}catch{}
+ return id;
+}
+// Joins a room, asking again when the connection fails but not when the server says no.
+export async function joinRoom(code:string,player:{name:string,avatar:string,color:string}) {
+ const id=joinId(code);
+ for(let tries=1;;tries++){
+  try{const r=await api('/'+encodeURIComponent(code),{action:'join',...player,joinId:id});try{sessionStorage.removeItem(joinKey)}catch{}return r}
+  catch(e){if(tries>=4||(e instanceof RoomError&&e.status>=400&&e.status<500))throw e;await new Promise(done=>setTimeout(done,700))}
+ }
 }
 export function useRoom(seat:Seat|null,onExpired:()=>void) {
  const [room,setRoom]=useState<Room|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[offline,setOffline]=useState(false),[now,setNow]=useState(Date.now());
@@ -37,7 +59,7 @@ export function useRoom(seat:Seat|null,onExpired:()=>void) {
  useEffect(()=>{
   setRoom(null);setError('');setOffline(false);rtt.current=Infinity;if(!seat)return;
   let active=true,timeout:ReturnType<typeof setTimeout>,wait=650;
-  const poll=async()=>{const sentAt=Date.now();try{const {room:r}=await api('/'+seat.code,undefined,seat.token);if(!active)return;accept(r,sentAt);wait=r.phase==='playing'&&(r.game==='turbo'||r.game==='reaction')?250:650;setOffline(false)}
+  const poll=async()=>{const sentAt=Date.now();try{const {room:r}=await api('/'+seat.code,undefined,seat.token);if(!active)return;accept(r,sentAt);wait=r.phase==='playing'&&(r.game==='turbo'||r.game==='reaction')?250:650;setOffline(false);setError(was=>was===lost?'':was)}
    catch(e){if(!active)return;if(e instanceof RoomError&&[401,403,404,410].includes(e.status)){expire.current();return}setOffline(true)}
    if(active)timeout=setTimeout(poll,wait);
   };poll();const clock=setInterval(()=>setNow(Date.now()),100);
@@ -63,4 +85,22 @@ export function useSignal(room:Room|null,clock:()=>number) {
   return ()=>clearTimeout(timer);
  },[signalAt,playing,clock]);
  return {go:signalAt!==null&&fired===signalAt,shownAt};
+}
+// Keeps the first reaction tap of a round and sends it until the server has it, so a lost message costs no time.
+export function useTap(room:Room|null,id:string|undefined,command:(body:Record<string,unknown>)=>Promise<boolean>) {
+ const [tap,setTap]=useState<{key:string,body:Record<string,unknown>}|null>(null);
+ // A pause, restart or new round moves the deadline, which drops an unsent tap.
+ const open=room?.game==='reaction'&&room.phase==='playing'&&!room.revealing&&!room.players.find(p=>p.id===id)?.answered;
+ const key=open?room.round+':'+room.deadline:null,body=tap&&tap.key===key?tap.body:null;
+ const held=useRef<string|null>(null);
+ useEffect(()=>{
+  if(!body)return;
+  let active=true;
+  (async()=>{while(active){if(await command(body)){navigator.vibrate?.(25);return}await new Promise(done=>setTimeout(done,300))}})();
+  return ()=>{active=false};
+ },[body,command]);
+ return {sending:!!body,hold(next:Record<string,unknown>){
+  if(!room||!key||held.current===key)return;
+  held.current=key;setTap({key,body:{action:'input',round:room.round,...next}});
+ }};
 }

@@ -27,6 +27,8 @@ export const newStats = (): Stats => ({ requests: 0, lost: 0, statuses: {} });
 export class Phone {
   room: RoomSnapshot | null = null;
   id = '';
+  // Made up once, and sent with every try to join.
+  joinId = '';
   token = '';
   offline = false;
   expired = false;
@@ -43,11 +45,12 @@ export class Phone {
   constructor(
     readonly world: World,
     readonly code: string,
-    public link: Link,
+    readonly link: Link,
     readonly stats: Stats,
     readonly skew = 0,
   ) {
     this.delta = 0;
+    while (this.joinId.length < 16) this.joinId += Math.floor(world.random() * 36).toString(36);
   }
   deviceNow() {
     return this.world.now() + this.skew;
@@ -100,7 +103,7 @@ export class Phone {
     }
   }
   async join(name: string) {
-    const reply = await this.request({ action: 'join', name });
+    const reply = await this.request({ action: 'join', name, joinId: this.joinId });
     this.id = reply.playerId!;
     this.token = reply.playerToken!;
     return this;
@@ -187,11 +190,7 @@ export async function openTable(world: World, game: string, phoneLinks: Link[], 
   const loops: Promise<void>[] = [host.poll()];
   await Promise.all(
     phones.map(async (phone, i) => {
-      // Joining with a lost reply is tested on its own, so here everyone gets in cleanly.
-      const link = phone.link;
-      phone.link = { ...link, loss: 0 };
       await phone.enter('P' + i);
-      phone.link = link;
       loops.push(phone.poll());
     }),
   );
