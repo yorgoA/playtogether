@@ -30,8 +30,19 @@ export default function Home(){
  const features=[games[4],games[0],games[1]],feat=features[index];
  const sections=view==='Home'?categories.map(({id,title})=>({id,title,items:games.filter(g=>g.group===title)})):[{id:undefined,title:view,items:view==='Search'?games.filter(g=>(g.name+' '+g.group).toLowerCase().includes(query.trim().toLowerCase())):(view==='Favorites'?favorites:recent).flatMap(id=>games.filter(g=>g.id===id))}];
  return <div className="hub"><header className="top"><div className="topInner"><button className="brand" onClick={()=>nav('Home')} aria-label="PlayTogether home"><img src="/favicon.svg" alt=""/><span>Play<span>Together</span></span></button><nav>{[['Search',Search],['Home',House],['Recents',History],['Favorites',Heart]].map(([label,I])=>{const Icon=I as typeof House;return <button key={String(label)} className={view===label?'selected':''} onClick={()=>nav(String(label))}><Icon/>{String(label)}</button>})}</nav><button className="join" aria-label="Open profile" onClick={()=>setProfileOpen(true)}>{viewer?<>{viewer.avatar} {viewer.name}</>:<UserCircle/>}</button></div></header>
- <main className="main">{view==='Home'&&<><div className="sectionTop"><h1>Game hub<span>.</span></h1><button className="how" onClick={()=>setHelp(true)}><HelpCircle/>How to play</button></div>
- <section onFocusCapture={()=>setHeroFocus(true)} onBlurCapture={e=>setHeroFocus(e.currentTarget.contains(e.relatedTarget))} className={'hero hero-'+feat.art} style={{backgroundImage:'url(/art/'+feat.art+'.webp)'}}><div className="heroShade"/><div className="heroContent"><div className="kicker"><span className="signal"><AudioLines size={16}/></span> FEATURED GAME</div><h2>{feat.name.split(' ')[0]} <em>{feat.name.split(' ')[1]}</em></h2><p>{feat.description}</p><Meta g={feat}/><div className="actions">{feat.live&&<button className="primary" onClick={()=>play(feat)}><Play fill="currentColor"/>Play now</button>}<button className="secondary" onClick={()=>setDetail(feat)}><Info/>Game details</button></div></div><div className="heroPager"><button aria-label={paused?"Resume carousel":"Pause carousel"} onClick={()=>setPaused(!paused)}>{paused?<Play/>:<Pause/>}</button><button aria-label="Previous featured game" onClick={()=>setIndex((index+2)%3)}><ChevronLeft/></button><span>0{index+1} <b>/ 03</b></span><button aria-label="Next featured game" onClick={()=>setIndex((index+1)%3)}><ChevronRight/></button></div></section>
+ <main className="main">{view==='Home'&&<><div className="homeTools"><button className="how" onClick={()=>setHelp(true)}><HelpCircle/>How to play</button></div>
+ <section onFocusCapture={()=>setHeroFocus(true)} onBlurCapture={e=>setHeroFocus(e.currentTarget.contains(e.relatedTarget))} className={'hero hero-'+feat.art} style={{backgroundImage:'url(/art/'+feat.art+'.webp)'}}><div className="heroShade"/>
+   {features.map((game, slide)=><div key={game.id} className="heroContent" hidden={slide!==index}>
+     <div className="kicker"><span className="signal"><AudioLines size={16}/></span> FEATURED GAME</div>
+     <h2>{game.name.split(' ')[0]} <em>{game.name.split(' ')[1]}</em></h2>
+     <p>{game.description}</p>
+     <Meta g={game}/>
+     <div className="actions">
+       {game.live&&<button className="primary" onClick={()=>play(game)}><Play fill="currentColor"/>Play now</button>}
+       <button className="secondary" onClick={()=>setDetail(game)}><Info/>Game details</button>
+     </div>
+   </div>)}
+   <div className="heroPager"><button aria-label={paused?"Resume carousel":"Pause carousel"} onClick={()=>setPaused(!paused)}>{paused?<Play/>:<Pause/>}</button><button aria-label="Previous featured game" onClick={()=>setIndex((index+2)%3)}><ChevronLeft/></button><span>0{index+1} <b>/ 03</b></span><button aria-label="Next featured game" onClick={()=>setIndex((index+1)%3)}><ChevronRight/></button></div></section>
  <nav className="categoryNav" aria-label="Game categories">
    {categories.map(({id,title,art})=>(
      <a key={id} href={'#'+id} style={{backgroundImage:`linear-gradient(0deg, #101116 0%, #101116cc 26%, #1011161a 80%), url(/art/${art}.webp)`}}>
