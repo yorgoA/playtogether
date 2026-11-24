@@ -32,6 +32,8 @@ Stop the development server with Ctrl+C, then run `npm run dev:lan`. Open the lo
 | Room API and persistence | `app/api/rooms/`, `lib/server/`, `db/`, and `drizzle/` |
 | Game logic shared across screens | `lib/island/`, `lib/controller/`, and `lib/arcade/` |
 
+Run `npm test` after changing game rules. GitHub runs the type check, tests and build on every pull request.
+
 Use separate Git branches for design and backend work. Coordinate changes to room actions and response fields because both screens consume the same API.
 
 See the [runtime guide](docs/runtime.md) for local builds and database details.
