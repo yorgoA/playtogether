@@ -1,12 +1,13 @@
 "use client";
 import {useCallback,useEffect,useRef,useState} from 'react';
-export type GameId='quiz'|'reaction'|'turbo'|'settlers';
-export const games={settlers:{title:'Island Settlers',instructions:'Place two settlements and roads, then roll, build and trade. Earn development cards, the longest road and the strongest army. First to ten points wins.',max:4},quiz:{title:'Quiz Volt',instructions:'Read the question on the TV and tap your answer before time runs out.',max:12},reaction:{title:'Reaction Duel',instructions:'Wait for GO on the TV. Tap your phone or give it a small shake as fast as you can.',max:8},turbo:{title:'Turbo Racers',instructions:'Race three laps. Steer around hazards, cross cyan boost pads, and hold Drift while steering. Release when charged for a boost.',max:4}};
+import type { PyramidView, RoomSnapshot } from '../contract';
+export type GameId = RoomSnapshot['game'];
+export const games={pyramid:{title:'Pyramid',instructions:'Memorize four cards, then claim a matching rank or bluff. The fewest penalty points wins. Drinks are optional.',max:8},settlers:{title:'Island Settlers',instructions:'Place two settlements and roads, then roll, build and trade. Earn development cards, the longest road and the strongest army. First to ten points wins.',max:4},quiz:{title:'Quiz Volt',instructions:'Read the question on the TV and tap your answer before time runs out.',max:12},reaction:{title:'Reaction Duel',instructions:'Wait for GO on the TV. Tap your phone or give it a small shake as fast as you can.',max:8},turbo:{title:'Turbo Racers',instructions:'Race three laps. Steer around hazards, cross cyan boost pads, and hold Drift while steering. Release when charged for a boost.',max:4}};
 export const avatars=['🦊','🐼','🐸','🐙','🐯','🐨','🐧','🐱'];
 export const colors=['#c3f76a','#bc96ff','#ffae65','#ff83b1','#69dafa','#ffdf75'];
 export type Player={bot?:boolean,standIn?:boolean,early?:boolean,reactionMs?:number,gained?:number,id:string,name:string,color:string,avatar:string,score:number,ready:boolean,connected:boolean,answered:boolean};
 export type Racer={impactUntil?:number,driftCharge?:number,driftDirection?:number,id:string,progress:number,lane:number,speed:number,boostReadyAt:number,boostUntil:number,finishedAt:number|null};
-export type Room={island?:import('../island/board').BoardView,revealing?:boolean,correct?:number|null,hazards:{at:number,lane:number}[],pads?:{at:number,lane:number}[],racers:Racer[],code:string,game:GameId,round:number,rounds:number,phase:'lobby'|'playing'|'paused'|'results'|'ended',question:{text:string,options:string[]}|null,deadline:number,signalAt:number|null,serverTime:number,players:Player[]};
+export type Room={pyramid?:PyramidView,island?:import('../island/board').BoardView,revealing?:boolean,correct?:number|null,hazards:{at:number,lane:number}[],pads?:{at:number,lane:number}[],racers:Racer[],code:string,game:GameId,round:number,rounds:number,phase:'lobby'|'playing'|'paused'|'results'|'ended',question:{text:string,options:string[]}|null,deadline:number,signalAt:number|null,serverTime:number,players:Player[]};
 export type Seat={code:string,token:string,game?:string,id?:string};
 export const hostKey='playtogether.host';
 export const phoneKey='playtogether.phone';
