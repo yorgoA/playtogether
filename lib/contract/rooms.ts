@@ -116,7 +116,8 @@ const Racer = z
 
 const Spot = z.object({ at: z.number(), lane: z.number() }).strict();
 
-// What a phone or the host screen may see of an Island Settlers match. `hand` is only the viewer's own.
+// What a phone or the host screen may see of an Island Settlers match. `hand` is only the viewer's own;
+// `handSizes` counts everyone's cards without saying which they are.
 const Island = z
   .object({
     robber: z.number().optional(),
@@ -135,6 +136,7 @@ const Island = z
     event: z.string(),
     offer: z.object({ give: Resource, want: Resource }).strict().nullable(),
     hand: Hand.optional(),
+    handSizes: z.record(z.string(), z.number()),
   })
   .strict();
 
