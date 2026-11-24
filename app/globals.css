@@ -56,3 +56,19 @@
   display: block;
   visibility: hidden;
 }
+
+.cover.pyramid {
+  background: radial-gradient(circle at 66% 48%, #ffe2a0 0 20%, transparent 20.5%),
+    linear-gradient(155deg, #211a3f 4%, #9f5b69 76%, #e2a676);
+}
+.cover.pyramid::before {
+  content: '';
+  position: absolute;
+  inset: 12% 7% 0 22%;
+  clip-path: polygon(58% 5%, 100% 85%, 0 100%);
+  background: conic-gradient(from 21deg at 58% 5%, #a45b5b 0 131deg, #d68e68 131deg);
+}
+.cover.pyramid .coverLogo {
+  color: #ffe5ad;
+  text-shadow: 2px 3px #5d2a4d;
+}
