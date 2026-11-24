@@ -185,6 +185,8 @@ describe('what the server sends fits the contract', () => {
     host({ action: 'addBot' });
     fits(RoomSnapshot, snapshot(room, T0));
     host({ action: 'start' });
+    fits(RoomSnapshot, snapshot(room, T0));
+    room.island!.phase = 'settlement';
     const first = room.island!.order[0];
     const seat = seats.findIndex((s) => s.id === first);
     const board = snapshot(room, T0, seats[seat].token);

@@ -65,8 +65,14 @@ for (let r = -2; r <= 2; r++)
     const i = tiles.length;
     tiles.push({ x, y, vs, resource: terrain[i], number: numbers[i] });
   }
-export type Phase = 'settlement' | 'road' | 'roll' | 'harvest' | 'discard' | 'robber' | 'steal' | 'build';
+export type Phase =
+  'order' | 'settlement' | 'road' | 'roll' | 'harvest' | 'discard' | 'robber' | 'steal' | 'build';
+// What is shuffled between matches. The shape of the island never changes.
+export type Layout = { terrain: (Resource | 'sand')[]; numbers: number[]; ports: (Resource | 'any')[] };
 export type Island = {
+  layout?: Layout;
+  // Each player's totals in the roll-off for turn order, re-rolls included.
+  orderRolls?: Record<string, number[]>;
   robber?: number;
   owed?: Record<string, number>;
   victims?: string[];
@@ -139,10 +145,66 @@ const angle = (e: (typeof edges)[number]) =>
 coast.sort((a, b) => angle(a) - angle(b));
 const kinds: (Resource | 'any')[] = ['any', 'grain', 'ore', 'any', 'clay', 'any', 'wool', 'timber', 'any'];
 export const ports = kinds.map((kind, i) => ({ ...coast[Math.floor((i * coast.length) / 9)], kind }));
-export const robberTile = (b: BoardView) => b.robber ?? tiles.findIndex((t) => t.resource === 'sand');
+const layoutKey = (l: Layout) => l.terrain.join() + l.numbers.join() + l.ports.join();
+const laidOut = new Map<string, { tiles: typeof tiles; ports: typeof ports }>();
+function boardOf({ layout }: Pick<BoardView, 'layout'>) {
+  if (!layout) return { tiles, ports };
+  const key = layoutKey(layout);
+  let found = laidOut.get(key);
+  if (!found) {
+    found = {
+      tiles: tiles.map((t, i) => ({ ...t, resource: layout.terrain[i], number: layout.numbers[i] })),
+      ports: ports.map((p, i) => ({ ...p, kind: layout.ports[i] })),
+    };
+    // Only a few matches matter at once; never grow without bound.
+    if (laidOut.size > 50) laidOut.clear();
+    laidOut.set(key, found);
+  }
+  return found;
+}
+export const tilesOf = (b: Pick<BoardView, 'layout'>) => boardOf(b).tiles;
+export const portsOf = (b: Pick<BoardView, 'layout'>) => boardOf(b).ports;
+const neighbours = tiles.map((t) =>
+  tiles.flatMap((o, i) => (o !== t && o.vs.filter((v) => t.vs.includes(v)).length === 2 ? [i] : [])),
+);
+const shuffle = <T>(list: readonly T[]) => {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+};
+const hot = (n: number) => n === 6 || n === 8;
+export const sixesApart = (placed: number[]) =>
+  placed.every((n, i) => !hot(n) || neighbours[i].every((o) => !hot(placed[o])));
+// New terrain, numbers and ports, with no two of the best numbers side by side.
+export function shuffledLayout(): Layout {
+  const land = shuffle(terrain),
+    desert = land.indexOf('sand'),
+    portKinds = shuffle(kinds);
+  for (let tries = 0; tries < 500; tries++) {
+    const placed = shuffle(numbers.filter(Boolean));
+    placed.splice(desert, 0, 0);
+    if (sixesApart(placed)) return { terrain: land, numbers: placed, ports: portKinds };
+  }
+  return { terrain: [...terrain], numbers: [...numbers], ports: portKinds };
+}
+// Whoever still has to roll for turn order, in seat order. Ties roll again among themselves.
+export function orderRollers(b: Pick<BoardView, 'order' | 'orderRolls'>) {
+  const rolls = (id: string) => b.orderRolls?.[id] ?? [];
+  return b.order.filter((id) =>
+    b.order.some((other) => {
+      if (other === id) return false;
+      const [mine, theirs] = [rolls(id), rolls(other)];
+      return mine.length <= theirs.length && mine.every((n, i) => n === theirs[i]);
+    }),
+  );
+}
+export const robberTile = (b: BoardView) => b.robber ?? tilesOf(b).findIndex((t) => t.resource === 'sand');
 export function tradeRate(b: BoardView, id: string, give: Resource) {
   let rate = 4;
-  for (const p of ports)
+  for (const p of portsOf(b))
     if (b.homes[p.a]?.id === id || b.homes[p.b]?.id === id) {
       if (p.kind === give) return 2;
       if (p.kind === 'any') rate = 3;

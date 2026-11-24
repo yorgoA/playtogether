@@ -8,14 +8,18 @@ import {
   piecesLeft,
   pointsFor,
   ports,
+  portsOf,
   robberTile,
+  shuffledLayout,
+  sixesApart,
   tiles,
+  tilesOf,
   tradeRate,
   vertices,
   type Hand,
   type Island,
 } from '../lib/island/board';
-import { islandMove, newIsland } from '../lib/server/island';
+import { islandMove, newIsland, startIsland } from '../lib/server/island';
 import { botMove } from '../lib/server/island-bot';
 
 afterEach(() => vi.restoreAllMocks());
@@ -66,6 +70,79 @@ describe('board', () => {
     expect(locations(b, 'a', 'road')).toEqual(expect.arrayContaining(beyond));
     b.homes[blocked] = { id: 'b', city: false };
     for (const i of beyond) expect(locations(b, 'a', 'road')).not.toContain(i);
+  });
+});
+
+describe('shuffled maps', () => {
+  it('keep the same pieces, keep 6 and 8 apart and leave the desert empty', () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+      const layout = shuffledLayout(),
+        land = tilesOf({ layout });
+      const pieces = (list: (string | number)[]) => [...list].sort().join();
+      expect(pieces(layout.terrain)).toBe(pieces(tiles.map((t) => t.resource)));
+      expect(pieces(layout.numbers)).toBe(pieces(tiles.map((t) => t.number)));
+      expect(pieces(layout.ports)).toBe(pieces(ports.map((p) => p.kind)));
+      expect(land.every((t) => (t.resource === 'sand') === (t.number === 0))).toBe(true);
+      expect(sixesApart(layout.numbers)).toBe(true);
+      seen.add(JSON.stringify(layout));
+    }
+    expect(seen.size).toBe(100);
+  });
+  it('decide production, robber and ports', () => {
+    const b = afterSetup();
+    b.layout = {
+      terrain: tiles.map((_, i) => (i ? 'ore' : 'sand')),
+      numbers: tiles.map((_, i) => (i === 18 ? 2 : i ? 12 : 0)),
+      ports: ports.map(() => 'wool'),
+    };
+    b.hands = { a: emptyHand(), b: emptyHand() };
+    b.homes = { [tiles[18].vs[2]]: { id: 'a', city: true }, [ports[0].a]: { id: 'b', city: false } };
+    expect(robberTile(b)).toBe(0);
+    expect(tradeRate(b, 'b', 'wool')).toBe(2);
+    expect(tradeRate(b, 'b', 'ore')).toBe(4);
+    rolls(1, 1);
+    move(b, 'a', { move: 'roll' });
+    expect(b.hands.a).toEqual(cards({ ore: 2 }));
+    expect(portsOf(b)).toHaveLength(9);
+  });
+});
+
+describe('roll-off', () => {
+  it('seats players from highest to lowest roll', () => {
+    const b = startIsland(['a', 'b', 'c']);
+    expect(() => move(b, 'b', { move: 'roll' })).toThrow('Wait for your turn');
+    for (const [id, x, y] of [
+      ['a', 1, 2],
+      ['b', 6, 6],
+      ['c', 4, 4],
+    ] as const) {
+      expect(b.phase).toBe('order');
+      rolls(x, y);
+      move(b, id, { move: 'roll' });
+    }
+    expect(b.order).toEqual(['b', 'c', 'a']);
+    expect([active(b), b.phase]).toEqual(['b', 'settlement']);
+    expect(Object.values(b.hands).every((h) => total(h) === 0)).toBe(true);
+  });
+  it('re-rolls ties without moving anyone else', () => {
+    const b = startIsland(['a', 'b', 'c']);
+    const roll = (x: number, y: number) => {
+      rolls(x, y);
+      move(b, active(b), { move: 'roll' });
+    };
+    roll(5, 5); // a 10
+    roll(1, 2); // b 3
+    roll(6, 4); // c 10, tied with a
+    expect([b.phase, active(b)]).toEqual(['order', 'a']);
+    roll(2, 2); // a 4
+    expect(active(b)).toBe('c');
+    roll(1, 3); // c 4, tied again
+    expect([b.phase, active(b)]).toEqual(['order', 'a']);
+    roll(1, 1);
+    roll(6, 6);
+    expect(b.order).toEqual(['c', 'a', 'b']);
+    expect(b.phase).toBe('settlement');
   });
 });
 
@@ -255,7 +332,7 @@ describe('bots', () => {
     for (let seed = 1; seed <= 25; seed++) {
       vi.spyOn(Math, 'random').mockImplementation(seeded(seed));
       const ids = Array.from({ length: count }, (_, i) => 'p' + i),
-        b = newIsland(ids);
+        b = startIsland(ids);
       let steps = 0;
       while (!ids.some((id) => pointsFor(b, id) >= 6)) {
         expect(steps++, 'seed ' + seed).toBeLessThan(5000);

@@ -11,7 +11,7 @@ import {
 import { GameError, games, type Game, type RoundData } from './games';
 
 import type { RoomSnapshot } from '../contract';
-import { islandMove, newIsland } from './island';
+import { islandMove, startIsland } from './island';
 import { handSize, pointsFor, type Island } from '../island/board';
 import { botMove } from './island-bot';
 type Player = {
@@ -203,7 +203,7 @@ function start(r: Room, now: number) {
       used.add(p.color.toLowerCase());
     }
     r.botAt = now + 1150;
-    r.island = newIsland(r.players.map((p) => p.id));
+    r.island = startIsland(r.players.map((p) => p.id));
   }
   if (r.game === 'turbo')
     r.race = createRace(

@@ -7,7 +7,7 @@ import {
   edges,
   locations,
   resources,
-  tiles,
+  tilesOf,
   type Island,
   type Piece,
   type Resource,
@@ -15,9 +15,11 @@ import {
 
 function landValue(board: Island, id: string, index: number) {
   const existing = new Set(
-    tiles.filter((t) => t.vs.some((v) => board.homes[v]?.id === id)).map((t) => t.resource),
+    tilesOf(board)
+      .filter((t) => t.vs.some((v) => board.homes[v]?.id === id))
+      .map((t) => t.resource),
   );
-  return tiles
+  return tilesOf(board)
     .filter((t) => t.vs.includes(index) && t.number)
     .reduce((sum, t) => sum + (6 - Math.abs(7 - t.number)) * (existing.has(t.resource) ? 1 : 1.5), 0);
 }
@@ -53,7 +55,7 @@ export function botMove(board: Island, id: string) {
   const phase = board.phase;
   if (phase === 'settlement' || phase === 'road') return place(phase, locations(board, id, phase));
   if (phase === 'robber') {
-    const choices = tiles
+    const choices = tilesOf(board)
       .map((t, index) => ({
         index,
         value:
@@ -64,7 +66,7 @@ export function botMove(board: Island, id: string) {
     return { move: 'robber', index: choices.sort((a, b) => b.value - a.value)[0].index };
   }
   if (phase === 'steal') return { move: 'steal', target: board.victims![0] };
-  if (phase === 'roll') return { move: 'roll' };
+  if (phase === 'roll' || phase === 'order') return { move: 'roll' };
   const options = (['city', 'settlement', 'road'] as Piece[])
     .map((piece) => ({ piece, choices: locations(board, id, piece) }))
     .filter((o) => o.choices.length);

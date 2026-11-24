@@ -45,6 +45,7 @@
 
 .isl-cards{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-variant-numeric:tabular-nums}.isl-cards i{width:.8em;height:1.1em;border-radius:3px;background:#ffd166;border:1.5px solid #12303c;box-shadow:3px -1px 0 -1px #e0a93a}.isl-built .isl-cards{margin-left:auto}
 
+.pt-session .isl-order-roll{grid-column:1/-1;margin:0;color:inherit;font-size:1em;line-height:1.2}
 .isl-construction{position:absolute;z-index:2;right:18px;bottom:58px;width:calc(var(--rail) - 30px);padding:12px 14px;border-radius:14px;background:#fffaf0;color:#12303c;font-size:clamp(.75rem,.9vw,1.1rem)}
 .isl-construction h3{margin:0 0 4px;font-size:1.15em;font-weight:800}.isl-construction>div{display:grid;grid-template-columns:1.5em minmax(0,1fr) auto;align-items:center;gap:1px 8px;padding:5px 0;border-top:1px solid #12303c26}.isl-construction>div>svg{width:1.5em;height:1.5em}.isl-construction>div>small{font-size:.9em;color:#38545f}.isl-construction .isl-cost{grid-column:2/-1;gap:4px}.isl-construction .isl-cost>span{width:1.75em;height:1.75em;background:#dcecec}.isl-construction .isl-cost svg{width:1.35em;height:1.35em}
 .pt-session .isl-construction p{display:flex;flex-wrap:wrap;gap:3px 9px;margin:0;padding-top:6px;border-top:1px solid #12303c26;font-size:.85em;line-height:1.2;color:#12303c}.isl-construction p span{display:inline-flex;align-items:center;gap:3px}.isl-construction p svg{width:1.25em;height:1.25em}
