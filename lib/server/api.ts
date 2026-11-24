@@ -1,7 +1,8 @@
 import { env } from 'cloudflare:workers';
-import { CreateRoomRequest, RoomCommand } from '../contract';
+import { adultGames, CreateRoomRequest, RoomCommand } from '../contract';
 import { readText } from './body';
 import { GameError } from './games';
+import { current, publicProfile } from './profiles';
 import { mutate, newRoom, snapshot, type Room } from './session';
 
 const ttl = 24 * 60 * 60 * 1000;
@@ -25,6 +26,10 @@ function invalid(error: { issues: { path: PropertyKey[]; message: string }[] }):
   const field = issue?.path.join('.');
   throw new GameError('Invalid request' + (field ? ': ' + field + ' — ' + issue.message : '.'));
 }
+async function checkAge(req: Request, game: unknown) {
+  if (typeof game === 'string' && adultGames.includes(game) && !publicProfile(await current(req))?.adult)
+    throw new GameError('Sign in with an 18+ profile to play drinking games.', 403);
+}
 const reply = (value: unknown, status = 200) =>
   Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 function failure(e: unknown) {
@@ -41,6 +46,7 @@ export async function create(req: Request) {
     const command = await body(req);
     const checked = CreateRoomRequest.safeParse(command);
     if (!checked.success) invalid(checked.error);
+    await checkAge(req, command.game);
     const store = db(),
       now = Date.now();
     await store.prepare('DELETE FROM rooms WHERE expires < ?').bind(now).run();
@@ -67,6 +73,7 @@ export async function handle(req: Request, rawCode: string) {
     const command = req.method === 'GET' ? { action: 'view' } : await body(req);
     const checked = RoomCommand.safeParse(command);
     if (!checked.success) invalid(checked.error);
+    if (command.action === 'configure') await checkAge(req, command.game);
     for (let i = 0; i < 12; i++) {
       const now = Date.now();
       const row = await store

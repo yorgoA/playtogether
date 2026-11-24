@@ -43,12 +43,13 @@ export function claimPyramid(
   index: unknown,
   players: string[],
 ) {
-  if (index !== board.index || !board.cards[board.index] || board.claim || board.outcome)
+  if (index !== board.index || !board.cards[board.index] || board.claim)
     throw new GameError('This card is closed.', 409);
   if (typeof to !== 'string' || from === to || !players.includes(to))
     throw new GameError('Choose another connected player.');
   if (typeof slot !== 'number' || !Number.isInteger(slot) || !board.hands[from]?.[slot])
     throw new GameError('Choose an unused card from your hand.');
+  board.outcome = null;
   board.claim = { from, to, slot };
 }
 
@@ -65,7 +66,8 @@ export function resolvePyramid(board: Pyramid, player: string, call: boolean, in
     from: claim.from,
     to: claim.to,
     loser: call && !match ? claim.from : claim.to,
-    points: level,
+    // Calling doubles the sips, whoever turns out to be wrong.
+    points: call ? level * 2 : level,
     verdict: call ? (match ? 'match' : 'bluff') : 'accepted',
     ...(call ? { card } : {}),
   };

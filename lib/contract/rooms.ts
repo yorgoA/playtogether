@@ -4,7 +4,9 @@ import { z } from 'zod';
 // real responses against the response schemas. A field added, removed or retyped on either side fails CI
 // until this file (and the screens that read it) agree.
 
-export const gameIds = ['quiz', 'reaction', 'turbo', 'settlers', 'pyramid'] as const;
+export const gameIds = ['quiz', 'reaction', 'turbo', 'settlers', 'pyramid', 'kings'] as const;
+// Drinking games: opening a room for one needs an adult profile.
+export const adultGames: readonly string[] = ['pyramid', 'kings'];
 export const resources = ['timber', 'clay', 'grain', 'wool', 'ore'] as const;
 export const devCards = ['knight', 'roads', 'bounty', 'monopoly', 'victory'] as const;
 export const pieces = ['road', 'settlement', 'city'] as const;
@@ -27,6 +29,14 @@ export const CreateRoomRequest = z.object({ game: Game.optional(), rounds: z.num
 const nothing = (action: string) => z.object({ action: z.literal(action) });
 // Sent by a phone with its player token.
 const playerCommands = [
+  z.object({
+    action: z.literal('kings'),
+    move: z.enum(['draw', 'pick', 'tap', 'drank', 'rule', 'done', 'catch']),
+    seq: z.number().int(),
+    slot: z.number().int().min(0).max(51).optional(),
+    target: z.string().max(60).optional(),
+    text: z.string().max(60).optional(),
+  }),
   z.object({
     action: z.literal('pyramidClaim'),
     index: z.number().int(),
@@ -78,6 +88,7 @@ const playerCommands = [
 ] as const;
 // Sent by the host screen with the host token.
 const hostCommands = [
+  z.object({ action: z.literal('kingsNext'), seq: z.number().int() }),
   z.object({ action: z.literal('pyramidFlip'), index: z.number().int() }),
   nothing('addBot'),
   nothing('start'),
@@ -194,12 +205,36 @@ const Pyramid = z.object({
   hand: z.array(Card).optional(),
   slots: z.array(z.boolean()).length(4).optional(),
 }).strict();
+// Everything on a Kings Cup table is public except the cards still face down.
+const Kings = z
+  .object({
+    left: z.array(z.boolean()).length(52),
+    turn: z.string(),
+    order: z.array(z.string()),
+    seq: z.number().int(),
+    phase: z.enum(['draw', 'pick', 'race', 'honor', 'rule', 'open']),
+    card: Card.nullable(),
+    slot: z.number().int(),
+    racers: z.array(z.string()),
+    tapped: z.array(z.string()),
+    mates: z.array(z.tuple([z.string(), z.string()])),
+    master: z.string().nullable(),
+    rules: z.array(z.object({ by: z.string(), text: z.string() }).strict()),
+    kings: z.number().int(),
+    event: z
+      .object({ drinkers: z.array(z.string()), amount: z.number().int(), caught: z.boolean() })
+      .strict()
+      .nullable(),
+  })
+  .strict();
+export type KingsView = z.infer<typeof Kings>;
 export type PyramidView = z.infer<typeof Pyramid>;
 
 export const RoomSnapshot = z
   .object({
     island: Island.optional(),
     pyramid: Pyramid.optional(),
+    kings: Kings.optional(),
     code: z.string().length(4),
     game: Game,
     phase: Phase,
