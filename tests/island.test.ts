@@ -1,45 +1,66 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { active, edges, emptyHand, locations, pointsFor, ports, robberTile, tiles, tradeRate, vertices, type Hand, type Island } from '../lib/island/board';
+import {
+  active,
+  edges,
+  emptyHand,
+  locations,
+  pointsFor,
+  ports,
+  robberTile,
+  tiles,
+  tradeRate,
+  vertices,
+  type Hand,
+  type Island,
+} from '../lib/island/board';
 import { islandMove, newIsland } from '../lib/server/island';
 import { botMove } from '../lib/server/island-bot';
 
 afterEach(() => vi.restoreAllMocks());
 
-const move = (b: Island, id: string, command: Record<string, unknown>) => islandMove(b, id, id, { revision: b.revision, ...command });
+const move = (b: Island, id: string, command: Record<string, unknown>) =>
+  islandMove(b, id, id, { revision: b.revision, ...command });
 const cards = (hand: Partial<Hand>): Hand => ({ ...emptyHand(), ...hand });
 const total = (hand: Hand) => Object.values(hand).reduce((a, n) => a + n, 0);
 
 function afterSetup(ids = ['a', 'b']) {
   const b = newIsland(ids);
   while (b.setup < 2 * ids.length) {
-    const id = active(b), piece = b.phase as 'settlement' | 'road';
+    const id = active(b),
+      piece = b.phase as 'settlement' | 'road';
     move(b, id, { move: 'place', piece, index: locations(b, id, piece)[0] });
   }
   return b;
 }
 function rolls(first: number, second: number) {
-  vi.spyOn(Math, 'random').mockReturnValueOnce((first - 1) / 6 + 0.01).mockReturnValueOnce((second - 1) / 6 + 0.01);
+  vi.spyOn(Math, 'random')
+    .mockReturnValueOnce((first - 1) / 6 + 0.01)
+    .mockReturnValueOnce((second - 1) / 6 + 0.01);
 }
 
 describe('board', () => {
   it('has the standard shape', () => {
     expect([tiles.length, vertices.length, edges.length, ports.length]).toEqual([19, 54, 72, 9]);
-    expect(tiles.filter(t => t.resource === 'sand')).toHaveLength(1);
+    expect(tiles.filter((t) => t.resource === 'sand')).toHaveLength(1);
   });
   it('keeps settlements at least two edges apart', () => {
     const b = newIsland(['a', 'b']);
     move(b, 'a', { move: 'place', piece: 'settlement', index: 0 });
     b.phase = 'settlement';
-    const next = edges.filter(e => e.a === 0 || e.b === 0).map(e => e.a === 0 ? e.b : e.a);
+    const next = edges.filter((e) => e.a === 0 || e.b === 0).map((e) => (e.a === 0 ? e.b : e.a));
     for (const v of [0, ...next]) expect(locations(b, 'b', 'settlement')).not.toContain(v);
   });
   it('does not extend a road through an opponent settlement', () => {
     const b = afterSetup();
-    b.homes = {}; b.roads = {}; b.phase = 'build';
-    const first = edges.findIndex(e => [e.a, e.b].every(v => edges.filter(x => x.a === v || x.b === v).length === 3));
+    b.homes = {};
+    b.roads = {};
+    b.phase = 'build';
+    const first = edges.findIndex((e) =>
+      [e.a, e.b].every((v) => edges.filter((x) => x.a === v || x.b === v).length === 3),
+    );
     const blocked = edges[first].b;
     b.roads[first] = 'a';
-    const beyond = edges.flatMap((e, i) => i !== first && (e.a === blocked || e.b === blocked) ? [i] : []);
+    const beyond = edges.flatMap((e, i) => (i !== first && (e.a === blocked || e.b === blocked) ? [i] : []));
     expect(locations(b, 'a', 'road')).toEqual(expect.arrayContaining(beyond));
     b.homes[blocked] = { id: 'b', city: false };
     for (const i of beyond) expect(locations(b, 'a', 'road')).not.toContain(i);
@@ -48,9 +69,11 @@ describe('board', () => {
 
 describe('setup', () => {
   it('goes forward, then in reverse, then rolls', () => {
-    const b = newIsland(['a', 'b', 'c']), order: string[] = [];
+    const b = newIsland(['a', 'b', 'c']),
+      order: string[] = [];
     while (b.phase !== 'roll') {
-      const id = active(b), piece = b.phase as 'settlement' | 'road';
+      const id = active(b),
+        piece = b.phase as 'settlement' | 'road';
       if (piece === 'settlement') order.push(id);
       move(b, id, { move: 'place', piece, index: locations(b, id, piece)[0] });
     }
@@ -69,25 +92,33 @@ describe('setup', () => {
 describe('turns', () => {
   it('rejects stale, out-of-turn and out-of-phase moves', () => {
     const b = afterSetup();
-    expect(() => islandMove(b, 'a', 'a', { move: 'roll', revision: b.revision - 1 })).toThrow('board changed');
+    expect(() => islandMove(b, 'a', 'a', { move: 'roll', revision: b.revision - 1 })).toThrow(
+      'board changed',
+    );
     expect(() => move(b, 'b', { move: 'roll' })).toThrow('Wait for your turn');
     expect(() => move(b, 'a', { move: 'end' })).toThrow('unavailable');
   });
   it('pays settlements once and cities twice, except on the robber tile', () => {
-    const b = afterSetup(), i = tiles.findIndex((t, k) => t.number === 8 && k !== robberTile(b)), t = tiles[i];
+    const b = afterSetup(),
+      i = tiles.findIndex((t, k) => t.number === 8 && k !== robberTile(b)),
+      t = tiles[i];
     const other = tiles.findIndex((x, k) => x.number === 8 && k !== i);
     b.homes = { [t.vs[0]]: { id: 'a', city: false }, [t.vs[2]]: { id: 'b', city: true } };
     b.hands = { a: emptyHand(), b: emptyHand() };
     expect(tiles[other].vs).not.toContain(t.vs[0]);
-    rolls(4, 4); move(b, 'a', { move: 'roll' });
+    rolls(4, 4);
+    move(b, 'a', { move: 'roll' });
     expect([b.hands.a, b.hands.b]).toEqual([cards({ [t.resource]: 1 }), cards({ [t.resource]: 2 })]);
-    b.phase = 'roll'; b.robber = i;
-    rolls(4, 4); move(b, 'a', { move: 'roll' });
+    b.phase = 'roll';
+    b.robber = i;
+    rolls(4, 4);
+    move(b, 'a', { move: 'roll' });
     expect([total(b.hands.a), total(b.hands.b)]).toEqual([1, 2]);
   });
   it('charges for building and rejects what you cannot afford', () => {
     const b = afterSetup();
-    b.phase = 'build'; b.hands.a = emptyHand();
+    b.phase = 'build';
+    b.hands.a = emptyHand();
     const index = locations(b, 'a', 'road')[0];
     expect(() => move(b, 'a', { move: 'place', piece: 'road', index })).toThrow('more resources');
     b.hands.a = cards({ timber: 1, clay: 1 });
@@ -97,7 +128,8 @@ describe('turns', () => {
   });
   it('upgrades a settlement to a two-point city', () => {
     const b = afterSetup();
-    b.phase = 'build'; b.hands.a = cards({ grain: 2, ore: 3 });
+    b.phase = 'build';
+    b.hands.a = cards({ grain: 2, ore: 3 });
     move(b, 'a', { move: 'place', piece: 'city', index: locations(b, 'a', 'city')[0] });
     expect(pointsFor(b, 'a')).toBe(3);
   });
@@ -107,14 +139,17 @@ describe('rolling seven', () => {
   it('discards half of large hands, then moves the robber and steals', () => {
     const b = afterSetup();
     b.hands = { a: cards({ ore: 9 }), b: cards({ wool: 7 }) };
-    rolls(3, 4); move(b, 'a', { move: 'roll' });
+    rolls(3, 4);
+    move(b, 'a', { move: 'roll' });
     expect(b.phase).toBe('discard');
     expect(b.owed).toEqual({ a: 4 });
-    expect(() => move(b, 'a', { move: 'discard', cards: ['wool', 'wool', 'wool', 'wool'] })).toThrow('from your hand');
+    expect(() => move(b, 'a', { move: 'discard', cards: ['wool', 'wool', 'wool', 'wool'] })).toThrow(
+      'from your hand',
+    );
     move(b, 'a', { move: 'discard', cards: ['ore', 'ore', 'ore', 'ore'] });
     expect(b.phase).toBe('robber');
     expect(() => move(b, 'a', { move: 'robber', index: robberTile(b) })).toThrow('different tile');
-    const target = tiles.findIndex((t, i) => i !== robberTile(b) && t.vs.some(v => b.homes[v]?.id === 'b'));
+    const target = tiles.findIndex((t, i) => i !== robberTile(b) && t.vs.some((v) => b.homes[v]?.id === 'b'));
     move(b, 'a', { move: 'robber', index: target });
     expect(b.phase).toBe('steal');
     expect(() => move(b, 'a', { move: 'steal', target: 'a' })).toThrow('adjacent opponent');
@@ -127,15 +162,17 @@ describe('rolling seven', () => {
 describe('trading', () => {
   function building(hands: Record<string, Hand>) {
     const b = afterSetup();
-    b.phase = 'build'; b.hands = hands; b.homes = {};
+    b.phase = 'build';
+    b.hands = hands;
+    b.homes = {};
     return b;
   }
   it('uses 4:1 at the bank, 3:1 at a general port and 2:1 at a matching port', () => {
     const b = building({ a: cards({ ore: 4 }), b: emptyHand() });
     expect(tradeRate(b, 'a', 'ore')).toBe(4);
-    b.homes = { [ports.find(p => p.kind === 'any')!.a]: { id: 'a', city: false } };
+    b.homes = { [ports.find((p) => p.kind === 'any')!.a]: { id: 'a', city: false } };
     expect(tradeRate(b, 'a', 'ore')).toBe(3);
-    b.homes = { [ports.find(p => p.kind === 'ore')!.a]: { id: 'a', city: false } };
+    b.homes = { [ports.find((p) => p.kind === 'ore')!.a]: { id: 'a', city: false } };
     expect(tradeRate(b, 'a', 'ore')).toBe(2);
     move(b, 'a', { move: 'bank', give: 'ore', want: 'wool' });
     expect(b.hands.a).toEqual(cards({ ore: 2, wool: 1 }));
@@ -168,17 +205,19 @@ describe('bots', () => {
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
-  it.each([2, 3, 4])('finish legal games with %i players', count => {
+  it.each([2, 3, 4])('finish legal games with %i players', (count) => {
     for (let seed = 1; seed <= 25; seed++) {
       vi.spyOn(Math, 'random').mockImplementation(seeded(seed));
-      const ids = Array.from({ length: count }, (_, i) => 'p' + i), b = newIsland(ids);
+      const ids = Array.from({ length: count }, (_, i) => 'p' + i),
+        b = newIsland(ids);
       let steps = 0;
-      while (!ids.some(id => pointsFor(b, id) >= 6)) {
+      while (!ids.some((id) => pointsFor(b, id) >= 6)) {
         expect(steps++, 'seed ' + seed).toBeLessThan(5000);
-        const id = ids.find(id => botMove(b, id));
+        const id = ids.find((id) => botMove(b, id));
         expect(id, 'nobody can move in ' + b.phase).toBeDefined();
         move(b, id!, botMove(b, id!)!);
-        for (const hand of Object.values(b.hands)) for (const n of Object.values(hand)) expect(n).toBeGreaterThanOrEqual(0);
+        for (const hand of Object.values(b.hands))
+          for (const n of Object.values(hand)) expect(n).toBeGreaterThanOrEqual(0);
       }
       vi.restoreAllMocks();
     }

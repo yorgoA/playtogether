@@ -12,7 +12,27 @@ const eslintConfig = defineConfig([
     ".sites-runtime/**",
     "outputs/**",
     "work/**",
+    "vendor/**",
+    "lib/controller/qr/**",
   ]),
+  {
+    // Existing screens predate these rules. They stay visible as warnings;
+    // remove an entry once the screens no longer break it.
+    files: ["app/**/*.tsx", "components/**/*.tsx", "lib/controller/**/*.ts"],
+    rules: {
+      "react-hooks/purity": "warn",
+      "react-hooks/refs": "warn",
+      "react-hooks/set-state-in-effect": "warn",
+      "@next/next/no-html-link-for-pages": "warn",
+      "prefer-const": "warn",
+    },
+  },
+  {
+    files: ["app/api/**/*.ts", "lib/server/**/*.ts", "lib/island/**/*.ts", "db/**/*.ts", "tests/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["error", { ignoreRestSiblings: true, varsIgnorePattern: "^_" }],
+    },
+  },
   {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],
     rules: {

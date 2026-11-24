@@ -1,0 +1,14 @@
+# Backend only for now, so formatting does not conflict with work on the screens.
+/*
+!/app/
+/app/*
+!/app/api/
+!/lib/
+/lib/*
+!/lib/server/
+!/lib/island/
+!/db/
+!/tests/
+!/vite.config.ts
+!/vitest.config.ts
+!/drizzle.config.ts

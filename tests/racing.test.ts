@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { advanceRace, boostPads, createRace, drive, hazards, raceDuration, raceScores, resumeRace } from '../lib/server/racing';
+import {
+  advanceRace,
+  boostPads,
+  createRace,
+  drive,
+  hazards,
+  raceDuration,
+  raceScores,
+  resumeRace,
+} from '../lib/server/racing';
 
 const idle = { steering: 0, accelerate: 0, brake: 0, powerUp: false };
 const go = { ...idle, accelerate: 1 };
@@ -14,7 +23,8 @@ function run(race: ReturnType<typeof createRace>, until: number, input = go) {
 
 describe('race', () => {
   it('gives the same result however often it is advanced', () => {
-    const often = createRace(['a'], 0), rarely = createRace(['a'], 0);
+    const often = createRace(['a'], 0),
+      rarely = createRace(['a'], 0);
     for (const race of [often, rarely]) drive(race, 'a', { ...go, steering: 0.2 }, 0);
     for (let t = 0; t <= 5000; t += 17) advanceRace(often, t);
     advanceRace(often, 5000);
@@ -51,11 +61,13 @@ describe('race', () => {
     expect(race.cars[0].lane).toBe(1);
   });
   it('slows a car that hits a hazard and boosts one that crosses a pad', () => {
-    const hit = createRace(['a'], 0), h = hazards[0];
+    const hit = createRace(['a'], 0),
+      h = hazards[0];
     Object.assign(hit.cars[0], { progress: h.at - 0.001, lane: h.lane, speed: 0.06 });
     advanceRace(hit, 50);
     expect(hit.cars[0].speed).toBeLessThan(0.03);
-    const boosted = createRace(['a'], 0), pad = boostPads[0];
+    const boosted = createRace(['a'], 0),
+      pad = boostPads[0];
     Object.assign(boosted.cars[0], { progress: pad.at - 0.001, lane: pad.lane, speed: 0.06 });
     advanceRace(boosted, 50);
     expect(boosted.cars[0].boostUntil).toBeGreaterThan(50);
@@ -70,7 +82,8 @@ describe('race', () => {
     expect(race.cars[0].boostUntil).toBe(8800);
   });
   it('rewards releasing a charged drift', () => {
-    const race = createRace(['a'], 0), car = race.cars[0];
+    const race = createRace(['a'], 0),
+      car = race.cars[0];
     car.speed = 0.06;
     drive(race, 'a', { ...go, steering: 0.5, drift: true }, 0);
     advanceRace(race, 1000);
@@ -90,7 +103,8 @@ describe('race', () => {
   });
   it('ranks finishers above others, fastest first', () => {
     const race = createRace(['fast', 'slow', 'out'], 0);
-    race.cars[0].finishedAt = 50_000; race.cars[1].finishedAt = 60_000;
+    race.cars[0].finishedAt = 50_000;
+    race.cars[1].finishedAt = 60_000;
     race.cars[2].progress = 2.99;
     const s = raceScores(race, 0);
     expect(s.fast).toBeGreaterThan(s.slow);

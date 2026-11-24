@@ -50,7 +50,8 @@ describe('permissions and privacy', () => {
     expect(view.island!.hand).toBeDefined();
     expect(snapshot(island.room, T0).island!.hand).toBeUndefined();
     const json = JSON.stringify(view);
-    for (const secret of [island.room.hostToken, ...island.seats.map(s => s.token)]) expect(json).not.toContain(secret);
+    for (const secret of [island.room.hostToken, ...island.seats.map((s) => s.token)])
+      expect(json).not.toContain(secret);
   });
 });
 
@@ -63,7 +64,7 @@ describe('quiz', () => {
     play(1, { action: 'input', round: 1, value: correct }, T0 + 7500);
     expect(room.revealing).toBe(false);
     play(2, { action: 'input', round: 1, value: (correct + 1) % 4 }, T0 + 8000);
-    expect(room.players.map(p => p.score)).toEqual([1000, 750, 0]);
+    expect(room.players.map((p) => p.score)).toEqual([1000, 750, 0]);
     expect(room.revealing).toBe(true);
     expect(snapshot(room, T0 + 8000).correct).toBe(correct);
   });
@@ -128,9 +129,11 @@ describe('reaction', () => {
     play(0, { action: 'input', round: 1, reactionMs: 100 }, signal + 2500);
     expect(room.players[0].reactionMs).toBe(1000);
   });
-  it.each([undefined, '200', NaN, Infinity])('rejects a reaction time of %s', value => {
+  it.each([undefined, '200', NaN, Infinity])('rejects a reaction time of %s', (value) => {
     const { play, signal } = duel();
-    expect(() => play(0, { action: 'input', round: 1, reactionMs: value }, signal + 300)).toThrow('Invalid reaction');
+    expect(() => play(0, { action: 'input', round: 1, reactionMs: value }, signal + 300)).toThrow(
+      'Invalid reaction',
+    );
   });
   it('picks a fresh signal after a pause', () => {
     const { room, host, signal } = duel();
@@ -180,7 +183,7 @@ describe('dropped players', () => {
     host({ action: 'start' });
     ping(0, T0 + DROP);
     host({ action: 'kick', playerId: seats[1].id }, T0 + DROP);
-    expect(room.race!.cars.map(c => c.id)).toEqual([seats[0].id]);
+    expect(room.race!.cars.map((c) => c.id)).toEqual([seats[0].id]);
   });
 
   function island() {
@@ -192,7 +195,8 @@ describe('dropped players', () => {
     return t;
   }
   it('get a stand-in bot that plays until they return', () => {
-    const { room, host, play, seats } = island(), now = T0 + DROP;
+    const { room, host, play, seats } = island(),
+      now = T0 + DROP;
     host({ action: 'view' }, now + 5000);
     expect(room.island!.revision).toBe(0);
     host({ action: 'standIn', playerId: seats[1].id }, now);
@@ -204,12 +208,14 @@ describe('dropped players', () => {
     expect(room.island!.revision).toBe(1);
   });
   it('are not replaced while connected, and not removed from an island', () => {
-    const { host, seats } = island(), now = T0 + DROP;
+    const { host, seats } = island(),
+      now = T0 + DROP;
     expect(() => host({ action: 'standIn', playerId: seats[0].id }, now)).toThrow('disconnected');
     expect(() => host({ action: 'kick', playerId: seats[1].id }, now)).toThrow('bot take over');
   });
   it('do not block a rematch when a bot stands in', () => {
-    const { room, host, seats } = island(), now = T0 + DROP;
+    const { room, host, seats } = island(),
+      now = T0 + DROP;
     expect(() => host({ action: 'restart' }, now)).toThrow('connected and ready');
     host({ action: 'standIn', playerId: seats[1].id }, now);
     host({ action: 'restart' }, now);

@@ -32,7 +32,7 @@ Stop the development server with Ctrl+C, then run `npm run dev:lan`. Open the lo
 | Room API and persistence | `app/api/rooms/`, `lib/server/`, `db/`, and `drizzle/` |
 | Game logic shared across screens | `lib/island/`, `lib/controller/`, and `lib/arcade/` |
 
-Run `npm test` after changing game rules. GitHub runs the type check, tests and build on every pull request.
+Run `npm run check` before opening a pull request. GitHub runs the same checks. See [AGENTS.md](AGENTS.md) for who owns which files and how to work in parallel.
 
 Use separate Git branches for design and backend work. Coordinate changes to room actions and response fields because both screens consume the same API.
 
