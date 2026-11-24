@@ -6,6 +6,10 @@ PlayTogether turns a shared screen into a game table and each player's phone int
 
 The shared screen shows the island, settlements, roads, ports, dice, construction costs, and how many cards each player holds. Players use their phones to view their hand, costs, and remaining pieces (15 roads, 5 settlements, 4 cities), and choose actions for the current phase. Add bots to fill seats when playing solo or with a smaller group. Every match shuffles the terrain, numbers, and ports, and players roll to decide the turn order, highest first. Development cards, the longest road (5+), and the strongest army (3+ knights) count toward the ten points needed to win. Trades can include several cards on each side, and the bank holds 19 of each resource.
 
+## Storm Deck
+
+A shedding card game for two to eight players. Play on either of two shared piles by element or neighbouring number, keep a streak going, and avoid holding the fewest cards when the storm breaks. The TV shows the table; hands stay on phones. Rules shared by the server and phones are in `lib/storm/`.
+
 ## Run locally
 
 Install Node.js 24 LTS and Git. Clone the private repository using your GitHub account, then run:

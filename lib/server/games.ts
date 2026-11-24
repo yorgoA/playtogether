@@ -14,5 +14,6 @@ export const games: Record<Game, { name: string; minPlayers: number; maxPlayers:
   reaction: { name: 'Reaction Duel', minPlayers: 2, maxPlayers: 8 },
   settlers: { name: 'Island Settlers', minPlayers: 2, maxPlayers: 4 },
   pyramid: { name: 'Pyramid', minPlayers: 2, maxPlayers: 8 },
+  storm: { name: 'Storm Deck', minPlayers: 2, maxPlayers: 8 },
   kings: { name: 'Kings Cup', minPlayers: 2, maxPlayers: 8 },
 };

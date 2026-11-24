@@ -5,7 +5,7 @@ import { cheerEmoji } from '../quiz/rules';
 // real responses against the response schemas. A field added, removed or retyped on either side fails CI
 // until this file (and the screens that read it) agree.
 
-export const gameIds = ['quiz', 'reaction', 'settlers', 'pyramid', 'kings'] as const;
+export const gameIds = ['quiz', 'reaction', 'settlers', 'pyramid', 'kings', 'storm'] as const;
 export const quizTypes = ['accuracy', 'speed', 'balanced', 'minefield', 'jackpot'] as const;
 export const quizPowers = ['smoke', 'half', 'wager', 'thief', 'rush', 'mirror', 'copycat'] as const;
 export type QuizType = (typeof quizTypes)[number];
@@ -20,6 +20,8 @@ const Resource = z.enum(resources);
 const Piece = z.enum(pieces);
 const DevCard = z.enum(devCards);
 const HeldCard = z.object({ kind: DevCard, fresh: z.boolean() }).strict();
+// An element and a number, or a gust or calm.
+const StormCard = z.string().regex(/^([ETDF][1-8]|G|C)$/);
 const Phase = z.enum(['lobby', 'playing', 'paused', 'results', 'ended']);
 const IslandPhase = z.enum(['order', 'settlement', 'road', 'roll', 'harvest', 'discard', 'robber', 'steal', 'build']);
 // All five resources are always present, as zero when the player has none.
@@ -34,6 +36,16 @@ export const CreateRoomRequest = z.object({ game: Game.optional(), rounds: z.num
 const nothing = (action: string) => z.object({ action: z.literal(action) });
 // Sent by a phone with its player token.
 const playerCommands = [
+  z.object({
+    action: z.literal('storm'),
+    move: z.enum(['play', 'draw', 'end']),
+    seq: z.number().int(),
+    card: StormCard.optional(),
+    pile: z.number().int().min(0).max(1).optional(),
+    // Gusts: who gets which card.
+    target: z.string().max(60).optional(),
+    give: StormCard.optional(),
+  }),
   z.object({
     action: z.literal('kings'),
     move: z.enum(['draw', 'pick', 'tap', 'drank', 'rule', 'done', 'catch']),
@@ -221,6 +233,31 @@ const Kings = z
       .nullable(),
   })
   .strict();
+// Storm Deck. `hand` is only the viewer's own; `sizes` counts everyone's cards.
+const Storm = z
+  .object({
+    order: z.array(z.string()),
+    turn: z.string(),
+    seq: z.number().int(),
+    piles: z.array(StormCard).length(2),
+    streak: z.number().int().nullable(),
+    storm: z.number().int(),
+    event: z
+      .object({
+        kind: z.enum(['play', 'draw']),
+        by: z.string(),
+        card: StormCard.nullable(),
+        pile: z.number().int().nullable(),
+        to: z.string().nullable(),
+        hit: z.array(z.string()),
+      })
+      .strict()
+      .nullable(),
+    sizes: z.record(z.string(), z.number()),
+    hand: z.array(StormCard).optional(),
+  })
+  .strict();
+export type StormView = z.infer<typeof Storm>;
 // The standoff. Everything here is public.
 const Duel = z
   .object({
@@ -272,6 +309,7 @@ export const RoomSnapshot = z
     island: Island.optional(),
     pyramid: Pyramid.optional(),
     kings: Kings.optional(),
+    storm: Storm.optional(),
     quiz: Quiz.optional(),
     duel: Duel.optional(),
     code: z.string().length(4),
