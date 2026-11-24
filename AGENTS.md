@@ -33,7 +33,7 @@ Run `npm run check`: lint, formatting, types, tests and build. `npm run format` 
 
 Tables are defined in `db/schema.ts`. Change that file and run `npm run db:generate`. Never write migrations by hand and never edit one that has been merged.
 
-Known gap: `drizzle/0001_profiles.sql` was written by hand, so the profile tables are missing from `db/schema.ts` and `drizzle/meta`. Do not run `npm run db:generate` until that is repaired.
+`npm run db:verify` (also run by `npm run check` and CI) fails when `db/schema.ts` and the migrations disagree, for example after a hand-edited migration or a schema change without `npm run db:generate`. One thing Drizzle cannot express: `profiles.name` is case-insensitive (`COLLATE NOCASE`) in `drizzle/0001_profiles.sql`. Tests in `tests/` apply every migration to a real SQLite database and run the API routes against it.
 
 ## Security
 

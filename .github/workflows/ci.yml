@@ -22,5 +22,7 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck
+      - name: Check the schema and migrations agree
+        run: npm run db:verify
       - run: npm test
       - run: npm run build

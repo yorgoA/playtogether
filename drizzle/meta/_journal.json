@@ -8,6 +8,20 @@
       "when": 1795423421407,
       "tag": "0000_cuddly_gateway",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1795532694489,
+      "tag": "0001_profiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1795532695920,
+      "tag": "0002_indexes",
+      "breakpoints": true
     }
   ]
 }
