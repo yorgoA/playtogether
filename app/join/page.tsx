@@ -1,11 +1,13 @@
 "use client";
 import {useEffect,useRef,useState} from 'react';
-import {avatars,colors,games,joinRoom,phoneKey,saved,scoreText,useRoom,useSignal,useTap,type Seat} from '@/lib/controller/room';
+import {avatars,colors,drinking,games,joinRoom,phoneKey,saved,scoreText,useRoom,useSignal,useTap,type Seat} from '@/lib/controller/room';
 import {funnyName} from '@/lib/controller/names';
 import {IslandPhone} from '@/components/IslandGame';
 import {PyramidPhone} from '@/components/PyramidGame';
 import {KingsPhone} from '@/components/KingsGame';
 import {QuizPhone} from '@/components/QuizGame';
+import {PodiumPhone} from '@/components/Podium';
+import {CheerBar} from '@/components/Cheers';
 import {DuelPhone} from '@/components/DuelGame';
 import MotionControls from '@/components/MotionControls';
 import {Ranks} from '@/components/GameSession';
@@ -35,14 +37,15 @@ export default function Controller(){
  {message&&<p role="alert">{message}</p>}<button className="pt-primary" disabled={!code.trim()||joining}>{joining?'Joining…':'Join room'}</button></form>
  :!room?<div className="pt-pane"><h2>{offline?'Reconnecting…':'Connecting…'}</h2></div>:<>
  <div className="pt-game-head"><div><small>YOUR CONTROLLER</small><h1>{games[room.game].title}</h1></div></div><div className="pt-pane">
- {me&&<div className="pt-person"><span className="pt-avatar" style={{background:me.color}}>{me.avatar}</span><b>{me.name}</b><small>{scoreText(room.game,me.score)}</small></div>}
+ {me&&<div className="pt-person"><span className="pt-avatar" style={{background:me.color}}>{me.avatar}</span><b>{me.name}</b><small>{room.phase==='results'&&!drinking(room.game)?'':scoreText(room.game,me.score)}</small></div>}
  {room.phase==='lobby'?<><h2>{me?.ready?'You’re ready!':'Ready to play?'}</h2><p>{games[room.game].instructions}</p><button className="pt-primary" disabled={busy} onClick={()=>command({action:'ready',ready:!me?.ready})}>{me?.ready?'Cancel ready':'I’m ready'}</button><p>{room.players.filter(p=>p.ready).length} of {room.players.length} ready</p></>
- :room.phase==='paused'?<h2>Game paused</h2>:room.phase==='results'?<><h2>Final rankings</h2><Ranks room={room}/><p>Stay connected for the next match.</p></>
+ :room.phase==='paused'?<h2>Game paused</h2>:room.phase==='results'?<>{drinking(room.game)?<><h2>Final rankings</h2><Ranks room={room}/></>:<PodiumPhone room={room} id={seat.id!}><Ranks room={room}/></PodiumPhone>}<p>Stay connected for the next match.</p></>
  :room.phase==='ended'?<><h2>Session ended</h2><button className="pt-primary" onClick={forget}>Join another room</button></>
  :room.game==='pyramid'&&room.pyramid?<PyramidPhone key={room.pyramid.index} room={room} board={room.pyramid} id={seat.id!} command={command} busy={busy}/>
  :room.game==='kings'&&room.kings?<KingsPhone room={room} board={room.kings} id={seat.id!} command={command} busy={busy}/>
  :room.game==='settlers'&&room.island?<IslandPhone key={room.island.phase==='discard'?'discard-'+room.island.rolledAt:room.island.revision} room={room} id={seat.id!} command={command} busy={busy}/>:room.quiz?<QuizPhone room={room} quiz={room.quiz} now={now} id={seat.id!} command={command} busy={busy}/>
  :room.duel?<DuelPhone room={room} duel={room.duel} go={go} id={seat.id!} sending={tap.sending} shoot={react}/>:null}
+ {(room.phase==='results'||(room.phase==='playing'&&(room.quiz?.stage==='suspense'||(room.revealing&&(room.quiz||room.duel)))))&&<CheerBar command={command}/>}
  {room.game==='reaction'&&room.phase!=='ended'&&<MotionControls onShake={react}/>}
  {(error||offline)&&<p role="status">{error||'Connection lost. Reconnecting…'}</p>}</div></>}</main>
 }

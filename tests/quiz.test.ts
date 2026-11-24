@@ -226,6 +226,28 @@ describe('quiz powers', () => {
   });
 });
 
+describe('reactions', () => {
+  it('reach the TV during the reveal and results, for a moment, and not too often', () => {
+    const { room, play, until, seats, next } = quiz(2, 1);
+    const cheer = (after: number) => play(0, { action: 'cheer', emoji: '🔥' }, room.started + after);
+    const seen = (after: number) => snapshot(room, room.started + after, room.hostToken).cheers;
+    until('question');
+    cheer(0);
+    expect(seen(0)).toEqual([]);
+    until('reveal');
+    cheer(0);
+    cheer(300);
+    expect(seen(300)).toMatchObject([{ from: seats[0].id, emoji: '🔥' }]);
+    cheer(800);
+    const numbers = seen(800).map((c) => c.n);
+    expect(new Set(numbers).size).toBe(2);
+    expect(seen(5000)).toEqual([]);
+    next();
+    cheer(9000);
+    expect(seen(9000)).toHaveLength(1);
+  });
+});
+
 describe('trivia', () => {
   const encoded = (over: Record<string, unknown> = {}) => ({
     category: 'Science%3A%20Computers',

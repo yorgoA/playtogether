@@ -42,6 +42,7 @@ describe('what the screens send is accepted', () => {
     { action: 'input', round: 2, reactionMs: 231.5 },
     { action: 'input', round: 2, draw: 3, early: true },
     { action: 'quizPower', round: 2, power: null },
+    { action: 'cheer', emoji: '🔥' },
     { action: 'quizPower', round: 2, power: 'smoke', target: 'someone' },
     { action: 'island', move: 'roll', revision: 4 },
     { action: 'island', move: 'place', revision: 4, piece: 'road', index: 12 },

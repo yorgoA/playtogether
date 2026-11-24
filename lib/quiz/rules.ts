@@ -1,9 +1,12 @@
 // Names and texts shared by the server, the TV and the phones.
 import type { QuizPower, QuizType } from '../contract/rooms';
 
+// Reactions phones can send to the TV.
+export const cheerEmoji = ['🔥', '😂', '👏', '😱', '💀'] as const;
+
 // How long each part of a round lasts.
 export const introMs = 2600;
-export const powerMs = 5000;
+export const powerMs = 10000;
 export const suspenseMs = 4200;
 export const revealMs = 5500;
 // During the suspense the TV crosses out a wrong answer at each of these moments.
