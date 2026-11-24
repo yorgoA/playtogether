@@ -125,8 +125,8 @@ describe('reaction', () => {
   }
   it('hides the signal until shortly before it fires', () => {
     const { room, signal } = duel();
-    expect(snapshot(room, signal - 801).signalAt).toBeNull();
-    expect(snapshot(room, signal - 800).signalAt).toBe(signal);
+    expect(snapshot(room, signal - 1801).signalAt).toBeNull();
+    expect(snapshot(room, signal - 1800).signalAt).toBe(signal);
   });
   it('uses the time the phone measured', () => {
     const { room, play, signal } = duel();
@@ -158,6 +158,63 @@ describe('reaction', () => {
     host({ action: 'pause' }, signal - 100);
     host({ action: 'resume' }, signal + 5000);
     expect(room.signalAt).toBe(signal + 5000 + 3500);
+  });
+});
+
+describe('repeating a join', () => {
+  const joinId = 'a-secret-join-id-1';
+  const join = (room: Parameters<typeof mutate>[0], extra: Record<string, unknown> = {}, now = T0) =>
+    mutate(room, { action: 'join', name: 'Ana', joinId, ...extra }, '', now).extras;
+
+  it('gives the same seat back, even when the room is full or playing', () => {
+    const { room, host, seats } = table('turbo', 3);
+    const first = join(room);
+    expect(join(room)).toEqual(first);
+    expect(room.players).toHaveLength(4);
+    mutate(room, { action: 'ready', ready: true }, first.playerToken, T0);
+    host({ action: 'start' });
+    expect(join(room)).toEqual(first);
+    expect(room.players.map((p) => p.id)).toEqual([...seats.map((s) => s.id), first.playerId]);
+  });
+  it('needs the same id: another phone cannot take a connected seat', () => {
+    const { room } = table('quiz', 1);
+    join(room);
+    expect(() => join(room, { joinId: 'another-secret-id-2' })).toThrow('already in the room');
+    expect(() => join(room, { joinId: undefined })).toThrow('already in the room');
+  });
+  it('does not match players who joined without an id', () => {
+    const { room, seats } = table('quiz', 2);
+    const { playerId } = mutate(room, { action: 'join', name: 'Ben' }, '', T0).extras;
+    expect(seats.map((s) => s.id)).not.toContain(playerId);
+    expect(join(room).playerId).not.toBe(playerId);
+  });
+  it('stops working once another phone has rejoined by nickname', () => {
+    const { room } = table('quiz', 1);
+    join(room);
+    const taken = join(room, { joinId: 'another-secret-id-2' }, T0 + DROP);
+    expect(() => join(room, {}, T0 + DROP)).toThrow('already in the room');
+    expect(join(room, { joinId: 'another-secret-id-2' }, T0 + DROP)).toEqual(taken);
+  });
+  it('is never shown to anyone', () => {
+    const { room } = table('quiz', 1);
+    const { playerToken } = join(room);
+    for (const token of ['', playerToken, room.hostToken])
+      expect(JSON.stringify(snapshot(room, T0, token))).not.toContain(joinId);
+  });
+  it('takes a seat back from a stand-in bot', () => {
+    const { room, host } = table('settlers', 1);
+    const first = join(room);
+    mutate(room, { action: 'ready', ready: true }, first.playerToken, T0);
+    host({ action: 'start' });
+    host({ action: 'standIn', playerId: first.playerId }, T0 + DROP);
+    expect(join(room, {}, T0 + DROP)).toEqual(first);
+    expect(room.players[1].standIn).toBeUndefined();
+  });
+  it('does not reopen an ended room', () => {
+    const { room, host } = table('quiz', 1);
+    join(room);
+    host({ action: 'end' });
+    expect(() => join(room)).toThrow('no longer accepting');
   });
 });
 

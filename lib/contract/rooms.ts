@@ -36,6 +36,9 @@ const playerCommands = [
   z.object({ action: z.literal('pyramidReply'), index: z.number().int(), call: z.boolean() }),
   z.object({
     action: z.literal('join'),
+    // A secret the phone makes up, sent again when it repeats a join whose reply it never got.
+    // It gives back the same seat, so it must be random and never shown to anyone.
+    joinId: z.string().min(16).max(64).optional(),
     name: z.string().min(1).max(40),
     avatar: z.string().max(40).optional(),
     color: z.string().max(16).optional(),

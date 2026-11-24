@@ -33,6 +33,7 @@ const fits = (schema: z.ZodTypeAny, value: unknown) => {
 describe('what the screens send is accepted', () => {
   const player = [
     { action: 'join', name: 'Ana', avatar: '🦊', color: '#c3f76a' },
+    { action: 'join', name: 'Ana', joinId: '0123456789abcdef' },
     { action: 'ready', ready: true },
     { action: 'input', round: 2, value: 3 },
     { action: 'input', round: 2, early: true },
@@ -108,6 +109,7 @@ describe('malformed requests are refused with the field named', () => {
       { action: 'island', move: 'discard', revision: 1, cards: ['gold'] },
       /cards/,
     ],
+    ['a join id short enough to guess', { action: 'join', name: 'Ana', joinId: 'abc' }, /joinId/],
     ['ready as text', { action: 'ready', ready: 'yes' }, /ready/],
     ['an unknown game', { action: 'configure', game: 'chess' }, /game/],
   ])('%s', async (_label, body, message) => {

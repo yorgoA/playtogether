@@ -17,6 +17,8 @@ import { active, goal, handSize, pointsFor, resources, type Island } from '../is
 import { botMove } from './island-bot';
 type Player = {
   bot?: boolean;
+  // What the phone called its join, so repeating it gives back this seat. As secret as the token.
+  joinId?: string;
   // A bot is playing this disconnected player's seat until they return.
   standIn?: boolean;
   id: string;
@@ -54,8 +56,9 @@ export type Room = {
 type Command = Record<string, unknown>;
 const connected = (p: Player, now: number) => !!p.bot || now - p.lastSeen < 25000;
 const revealMs = 3500;
-// Phones learn the signal shortly before it fires, so every screen can show it together.
-const signalLeadMs = 800;
+// Phones learn the signal before it fires, so every screen can show it together. Long enough for a slow
+// phone to lose a message and ask again, and shorter than the shortest wait (2 s).
+const signalLeadMs = 1800;
 // Nobody reacts faster than this, so a quicker tap was a guess.
 const fastestReactionMs = 80;
 // Most of a late tap's delay we accept as network time.
@@ -241,11 +244,20 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
   let dirty = advance(r, now);
   const extras: Record<string, string> = {};
   if (action === 'join') {
+    const joinId = typeof command.joinId === 'string' ? command.joinId : undefined;
+    const again = joinId ? r.players.find((p) => p.joinId === joinId) : undefined;
+    if (again && r.phase !== 'ended') {
+      // The same phone repeating a join. Both replies carry the same token, so either one works.
+      again.lastSeen = now;
+      again.standIn = undefined;
+      return { dirty: true, extras: { playerId: again.id, playerToken: again.token } };
+    }
     const wanted = typeof command.name === 'string' ? command.name.trim().toLowerCase() : '';
     const dropped = r.players.find((p) => p.name.toLowerCase() === wanted && !connected(p, now));
     if (dropped && r.phase !== 'ended') {
       // A fresh token moves the seat to this phone; the old one stops working.
       dropped.token = crypto.randomUUID();
+      dropped.joinId = joinId;
       dropped.lastSeen = now;
       dropped.standIn = undefined;
       return { dirty: true, extras: { playerId: dropped.id, playerToken: dropped.token } };
@@ -264,6 +276,7 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
     r.players.push({
       id,
       token: playerToken,
+      joinId,
       name,
       avatar,
       color,
