@@ -1,0 +1,103 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { GET as roomRoute, POST as roomPost } from '../app/api/rooms/[code]/route';
+import { POST as createRoute } from '../app/api/rooms/route';
+import { get, json, post } from './api-helpers';
+import { useDatabase } from './database';
+
+let sqlite: ReturnType<typeof useDatabase>;
+beforeEach(() => {
+  sqlite = useDatabase();
+});
+
+const ctx = (code: string) => ({ params: Promise.resolve({ code }) });
+const bearer = (token: string) => ({ authorization: 'Bearer ' + token });
+async function newRoom(game = 'quiz') {
+  const response = await createRoute(post('/api/rooms', { game }));
+  return { ...(await json(response)), status: response.status } as {
+    status: number;
+    code: string;
+    hostToken: string;
+  };
+}
+const send = async (code: string, body: unknown, token = '') =>
+  json(await roomPost(post('/api/rooms/' + code, body, bearer(token)), ctx(code)));
+const view = (code: string, token: string) => roomRoute(get('/api/rooms/' + code, bearer(token)), ctx(code));
+
+describe('rooms', () => {
+  it('creates a stored room with a four-character code and a host token', async () => {
+    const room = await newRoom();
+    expect(room.status).toBe(201);
+    expect(room.code).toMatch(/^[A-HJ-NP-Z2-9]{4}$/);
+    expect(sqlite.prepare('SELECT code, version FROM rooms').all()).toEqual([
+      { code: room.code, version: 0 },
+    ]);
+    expect(await json(await view(room.code, room.hostToken))).toMatchObject({
+      room: { phase: 'lobby', game: 'quiz' },
+    });
+  });
+  it('plays a join, ready and start flow through the stored state', async () => {
+    const { code, hostToken } = await newRoom();
+    const joined = await send(code, { action: 'join', name: 'Ana' });
+    await send(code, { action: 'ready', ready: true }, joined.playerToken);
+    const started = await send(code, { action: 'start' }, hostToken);
+    expect(started.room.phase).toBe('playing');
+    expect((await json(await view(code.toLowerCase(), joined.playerToken))).room.players[0].name).toBe('Ana');
+    expect(sqlite.prepare('SELECT version FROM rooms').get()).toEqual({ version: 3 });
+  });
+  it('keeps secrets out of what a player can read', async () => {
+    const { code, hostToken } = await newRoom();
+    const joined = await send(code, { action: 'join', name: 'Ana' });
+    const text = JSON.stringify(await json(await view(code, joined.playerToken)));
+    expect(text).not.toContain(hostToken);
+    expect(text).not.toContain(joined.playerToken);
+  });
+  it('rejects bad requests with the right status', async () => {
+    const { code } = await newRoom();
+    const status = async (response: Response) => response.status;
+    expect(await status(await roomRoute(get('/api/rooms/ZZZZ'), ctx('ZZZZ')))).toBe(404);
+    expect(await status(await roomRoute(get('/api/rooms/ab'), ctx('ab')))).toBe(404);
+    expect(await status(await roomRoute(get('/api/rooms/' + code), ctx(code)))).toBe(403);
+    expect(await status(await roomPost(post('/api/rooms/' + code, { action: 'start' }), ctx(code)))).toBe(
+      403,
+    );
+    const big = await roomPost(
+      post('/api/rooms/' + code, { action: 'join', name: 'x'.repeat(3000) }),
+      ctx(code),
+    );
+    expect(big.status).toBe(413);
+    const text = await roomPost(
+      new Request('http://localhost/x', {
+        method: 'POST',
+        body: '{}',
+        headers: { 'content-type': 'text/plain' },
+      }),
+      ctx(code),
+    );
+    expect(text.status).toBe(415);
+    expect((await createRoute(post('/api/rooms', { game: 'chess' }))).status).toBe(400);
+    expect((await createRoute(post('/api/rooms', { rounds: 99 }))).status).toBe(400);
+  });
+  it('does not return rooms that have expired, and removes them when a new room is made', async () => {
+    const old = await newRoom();
+    sqlite.prepare('UPDATE rooms SET expires = 1').run();
+    expect((await view(old.code, old.hostToken)).status).toBe(404);
+    await newRoom();
+    expect(sqlite.prepare('SELECT COUNT(*) AS n FROM rooms WHERE code = ?').get(old.code)).toEqual({ n: 0 });
+  });
+  it('applies simultaneous updates one after the other without losing any', async () => {
+    const { code } = await newRoom();
+    const names = ['A', 'B', 'C', 'D', 'E', 'F'];
+    const results = await Promise.all(names.map((name) => send(code, { action: 'join', name })));
+    const joined = results.filter((r) => r.playerToken);
+    const room = await json(await view(code, joined[0].playerToken));
+    expect(room.room.players).toHaveLength(joined.length);
+    expect(joined.length).toBeGreaterThan(0);
+  });
+  it('reports unavailable storage as a 503 without leaking details', async () => {
+    const { env } = await import('cloudflare:workers');
+    (env as { DB?: unknown }).DB = undefined;
+    const response = await createRoute(post('/api/rooms', {}));
+    expect(response.status).toBe(503);
+    expect(JSON.stringify(await json(response))).not.toMatch(/DB|sqlite|stack/i);
+  });
+});
