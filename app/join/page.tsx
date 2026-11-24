@@ -1,6 +1,7 @@
 "use client";
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {avatars,colors,games,joinRoom,phoneKey,saved,scoreText,useRoom,useSignal,useTap,type Seat} from '@/lib/controller/room';
+import {funnyName} from '@/lib/controller/names';
 import {IslandPhone} from '@/components/IslandGame';
 import {PyramidPhone} from '@/components/PyramidGame';
 import {KingsPhone} from '@/components/KingsGame';
@@ -15,15 +16,23 @@ export default function Controller(){
  function forget(){localStorage.removeItem(phoneKey);setSeat(null);setMessage('This connection has ended. Join another room to play.')}
  const {room,error,busy,command,offline,now,clock}=useRoom(seat,forget);
  const me=room?.players.find(p=>p.id===seat?.id);
+ // The last name made up for this player. One they typed is never swapped for another.
+ const made=useRef('');
+ function makeName(){made.current=funnyName(made.current);setName(made.current);return made.current}
  async function join(e:React.FormEvent){e.preventDefault();setJoining(true);setMessage('');
-  try{const r=await joinRoom(code.trim().toUpperCase(),{name:name.trim(),avatar,color});const s={code:r.room.code,id:r.playerId!,token:r.playerToken!};localStorage.setItem(phoneKey,JSON.stringify(s));setSeat(s)}catch(e){setMessage(e instanceof Error?e.message:'Unable to join. Try again.')}finally{setJoining(false)}}
+  try{const room=code.trim().toUpperCase();let nick=name.trim()||makeName(),r:Awaited<ReturnType<typeof joinRoom>>;
+   for(let tries=1;;tries++){
+    try{r=await joinRoom(room,{name:nick,avatar,color});break}
+    catch(e){if(tries>=4||nick!==made.current||!(e instanceof Error)||!e.message.includes('nickname is already'))throw e;nick=makeName()}
+   }
+   const s={code:r.room.code,id:r.playerId!,token:r.playerToken!};localStorage.setItem(phoneKey,JSON.stringify(s));setSeat(s)}catch(e){setMessage(e instanceof Error?e.message:'Unable to join. Try again.')}finally{setJoining(false)}}
  const {go,shownAt}=useSignal(room,clock),tap=useTap(room,seat?.id,command);
  function react(){tap.hold(go?{reactionMs:Math.max(0,performance.now()-shownAt.current)}:{early:true})}
  return <main className="pt-phone"><header className="pt-session-nav"><a className="pt-session-brand" href="/"><img width="35" height="35" src="/favicon.svg" alt=""/><span>Play<span style={{color:"var(--pt-lime)"}}>Together</span></span></a>{seat&&<span className="pt-room-tag">{seat.code}</span>}</header>
- {!loaded?<p>Opening controller…</p>:!seat?<form onSubmit={join} className="pt-pane pt-join"><small>PHONE CONTROLLER</small><h1>Join a room</h1><label>Room code<input autoComplete="off" autoCapitalize="characters" placeholder="Enter room code" value={code} onChange={e=>setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''))} required maxLength={8}/></label><label>Nickname<input autoComplete="nickname" placeholder="Your player name" value={name} required maxLength={20} onChange={e=>setName(e.target.value)}/></label>
+ {!loaded?<p>Opening controller…</p>:!seat?<form onSubmit={join} className="pt-pane pt-join"><small>PHONE CONTROLLER</small><h1>Join a room</h1><label>Room code<input autoComplete="off" autoCapitalize="characters" placeholder="Enter room code" value={code} onChange={e=>setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''))} required maxLength={8}/></label><div className="pt-nickname"><label htmlFor="nickname">Nickname</label><div><input id="nickname" autoComplete="nickname" placeholder="Blank = funny name" value={name} maxLength={20} onChange={e=>setName(e.target.value)}/><button type="button" aria-label="Make up a funny nickname" disabled={joining} onClick={makeName}>🎲</button></div></div>
  <fieldset><legend>Avatar</legend><div className="pt-picks">{avatars.map(a=><button type="button" key={a} aria-label={'Use '+a+' avatar'} aria-pressed={avatar===a} onClick={()=>setAvatar(a)}>{a}</button>)}</div></fieldset>
  <fieldset><legend>Player color</legend><div className="pt-picks">{colors.map((c,i)=><button type="button" key={c} className="pt-swatch" style={{background:c}} aria-pressed={color===c} aria-label={['Lime','Violet','Orange','Pink','Blue','Yellow'][i]} onClick={()=>setColor(c)}>{c===color?'✓':''}</button>)}</div></fieldset>
- {message&&<p role="alert">{message}</p>}<button className="pt-primary" disabled={!name.trim()||!code.trim()||joining}>{joining?'Joining…':'Join room'}</button></form>
+ {message&&<p role="alert">{message}</p>}<button className="pt-primary" disabled={!code.trim()||joining}>{joining?'Joining…':'Join room'}</button></form>
  :!room?<div className="pt-pane"><h2>{offline?'Reconnecting…':'Connecting…'}</h2></div>:<>
  <div className="pt-game-head"><div><small>YOUR CONTROLLER</small><h1>{games[room.game].title}</h1></div></div><div className="pt-pane">
  {me&&<div className="pt-person"><span className="pt-avatar" style={{background:me.color}}>{me.avatar}</span><b>{me.name}</b><small>{scoreText(room.game,me.score)}</small></div>}
