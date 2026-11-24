@@ -10,6 +10,7 @@ import {
 } from './racing';
 import { GameError, games, type Game, type RoundData } from './games';
 
+import type { RoomSnapshot } from '../contract';
 import { islandMove, newIsland } from './island';
 import { pointsFor, type Island } from '../island/board';
 import { botMove } from './island-bot';
@@ -418,7 +419,7 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
   } else throw new GameError('This action requires the host.', 403);
   return { dirty: true, extras };
 }
-export function snapshot(r: Room, now: number, token = '') {
+export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
   const viewer = r.players.find((p) => p.token === token);
   const board = r.island;
   const island = board
