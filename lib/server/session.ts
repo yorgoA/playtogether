@@ -48,6 +48,7 @@ export type Room = {
   round: number;
   quiz?: Quiz;
   duel?: Duel;
+  cheers?: { n: number; from: string; emoji: string; at: number }[];
   // Quiz questions this room has had, so a rematch brings new ones.
   asked?: string[];
   botAt?: number;
@@ -65,6 +66,9 @@ const connected = (p: Player, now: number) => !!p.bot || now - p.lastSeen < 2500
 // Phones learn the signal before it fires, so every screen can show it together. Long enough for a slow
 // phone to lose a message and ask again, and shorter than the shortest wait (2 s).
 const signalLeadMs = 1800;
+// How long a reaction stays on the TV, and how often one phone can send one.
+const cheerMs = 4000;
+const cheerGapMs = 700;
 // Nobody reacts faster than this, so a quicker tap was a guess.
 const fastestReactionMs = 80;
 // Most of a late tap's delay we accept as network time: enough to lose a message twice on a slow phone.
@@ -298,7 +302,16 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
   }
   if (action === 'view') return { dirty: advanceBots(r, now) || dirty, extras };
   if (r.phase === 'ended') throw new GameError('The host has ended this room.', 410);
-  if (action === 'ready' && player) {
+  if (action === 'cheer' && player) {
+    const recent = (r.cheers ?? []).filter((c) => now - c.at < cheerMs);
+    const moment =
+      r.phase === 'results' ||
+      (r.phase === 'playing' && (r.revealing || r.quiz?.stage === 'suspense') && (r.quiz || r.duel));
+    if (!moment || recent.some((c) => c.from === player.id && now - c.at < cheerGapMs))
+      return { dirty, extras };
+    const n = Math.max(now, (r.cheers?.at(-1)?.n ?? 0) + 1);
+    r.cheers = [...recent, { n, from: player.id, emoji: String(command.emoji), at: now }].slice(-20);
+  } else if (action === 'ready' && player) {
     if (r.phase !== 'lobby' || typeof command.ready !== 'boolean')
       throw new GameError('Ready status can be set in the lobby.');
     player.ready = command.ready;
@@ -508,6 +521,9 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
     revealing: Boolean(r.revealing),
     correct: quiz?.correct ?? null,
     question: quiz?.question ?? null,
+    cheers: (r.cheers ?? [])
+      .filter((c) => now - c.at < cheerMs)
+      .map(({ n, from, emoji }) => ({ n, from, emoji })),
     players: r.players.map((p) => ({
       bot: p.bot,
       standIn: p.standIn,

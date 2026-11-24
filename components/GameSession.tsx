@@ -6,6 +6,9 @@ import {IslandTV} from './IslandGame';
 import {PyramidTV} from './PyramidGame';
 import {KingsTV} from './KingsGame';
 import {QuizTV} from './QuizGame';
+import Podium from './Podium';
+import {Cheers} from './Cheers';
+import {isMuted,setMuted} from '@/lib/controller/sound';
 import {DuelTV} from './DuelGame';
 import {roundChoices} from '@/lib/quiz/rounds';
 import './session.css';
@@ -35,7 +38,8 @@ export function Ranks({room}:{room:Room}){
 }
 export default function GameSession({game,onExit}:{game:string,onExit:()=>void}){
  const selected:GameId=Object.hasOwn(games,game)?game as GameId:'quiz';
- const [seat,setSeat]=useState<Seat|null>(null),[initError,setInitError]=useState(''),[retry,setRetry]=useState(0),[confirm,setConfirm]=useState(false);
+ const [seat,setSeat]=useState<Seat|null>(null),[initError,setInitError]=useState(''),[retry,setRetry]=useState(0),[confirm,setConfirm]=useState(false),[quiet,setQuiet]=useState(false);
+ useEffect(()=>setQuiet(isMuted()),[]);
  const {room,error,busy,command,offline,now,clock}=useRoom(seat,()=>{localStorage.removeItem(hostKey);setSeat(null);setInitError('This room has closed.')});
  const {go}=useSignal(room,clock);
  useEffect(()=>{let active=true;setInitError('');
@@ -51,9 +55,10 @@ export default function GameSession({game,onExit}:{game:string,onExit:()=>void})
  const midIsland=room?.game==='settlers'&&!!room.island&&room.phase!=='results';
  const back=<button className="pt-secondary" onClick={onExit}>Game library</button>;
  const over=room?.phase==='results';
- return <main className="pt-session"><header className="pt-session-nav"><span className="pt-session-brand"><img width="35" height="35" src="/favicon.svg" alt=""/><span>Play<span style={{color:"var(--pt-lime)"}}>Together</span></span></span>{back}</header>
+ return <main className="pt-session"><header className="pt-session-nav"><span className="pt-session-brand"><img width="35" height="35" src="/favicon.svg" alt=""/><span>Play<span style={{color:"var(--pt-lime)"}}>Together</span></span></span><button className="pt-secondary sound-button" aria-pressed={!quiet} onClick={()=>{setMuted(!quiet);setQuiet(!quiet)}}>{quiet?'🔇 Sound off':'🔊 Sound on'}</button>{back}</header>
  {!room?<div className="pt-pane"><h1>{initError?'Room unavailable':'Opening your room…'}</h1><p>{initError||'Connecting to the game server.'}</p>{initError&&<button className="pt-primary" onClick={()=>setRetry(retry+1)}>Try again</button>}</div>:<>
  <div className="pt-game-head"><div><small>{room.phase==='lobby'?'GAME LOBBY':over?'FINAL SCORES':'NOW PLAYING'}</small><h1>{games[room.game].title}</h1></div><span className="pt-room-tag">Room <b>{room.code}</b></span></div>
+ <Cheers key={room.code} room={room}/>
  {(error||offline)&&<p className="pt-notice" role="status">{error||'Reconnecting to the room…'}</p>}
  {room.phase!=='lobby'&&room.phase!=='ended'&&missing.map(p=><p key={p.id} className="pt-notice" role="status">{p.name} disconnected. They can rejoin with the same nickname{midIsland?', or a bot can play until they return. ':'. '}<button className="pt-text" disabled={busy} onClick={()=>command({action:midIsland?'standIn':'kick',playerId:p.id})}>{midIsland?'Let a bot play':'Remove player'}</button></p>)}
  {room.phase==='lobby'?<div className="pt-lobby">
@@ -64,7 +69,7 @@ export default function GameSession({game,onExit}:{game:string,onExit:()=>void})
  {room.game==='settlers'&&<button className="pt-secondary" disabled={busy||room.players.length>=4||room.players.filter(p=>p.bot).length>=3} onClick={()=>command({action:'addBot'})}>Add bot</button>}
  {roundChoices[room.game]&&<label className="pt-round-label">Rounds <select value={room.rounds} disabled={busy} onChange={e=>command({action:'configure',rounds:Number(e.target.value)})}>{roundChoices[room.game]!.map(n=><option key={n}>{n}</option>)}</select></label>}
  <p>{games[room.game].instructions}</p>{room.game==='quiz'&&<p className="qz-credit">Questions from the <a className="pt-text" href="https://opentdb.com" target="_blank" rel="noreferrer">Open Trivia Database</a> (CC BY-SA 4.0).</p>}<button className="pt-primary" disabled={!canStart||busy} onClick={()=>command({action:'start'})}>Start game</button></section></div>
- :over?<section className="pt-pane"><h2>{winners.map(p=>p.name).join(' & ')} {drinking(room.game)?'stayed the most sober!':winners.length===1?'wins!':'tie!'}</h2><Ranks room={room}/><div className="pt-actions"><button className="pt-primary" disabled={busy} onClick={()=>command({action:'restart'})}>Rematch</button><button className="pt-secondary" disabled={busy} onClick={async()=>{if(await command({action:'lobby'}))onExit()}}>Choose another game</button></div></section>
+ :over?<section className="pt-pane">{drinking(room.game)?<><h2>{winners.map(p=>p.name).join(' & ')} stayed the most sober!</h2><Ranks room={room}/></>:<Podium room={room}/>}<div className="pt-actions"><button className="pt-primary" disabled={busy} onClick={()=>command({action:'restart'})}>Rematch</button><button className="pt-secondary" disabled={busy} onClick={async()=>{if(await command({action:'lobby'}))onExit()}}>Choose another game</button></div></section>
  :room.phase==='ended'?<section className="pt-pane"><h2>Session ended</h2>{back}</section>
  :<section className="pt-pane play-floor">{room.game!=='settlers'&&!drinking(room.game)&&<div className="pt-row"><small>ROUND {room.round} / {room.rounds}</small></div>}
  {room.game==='kings'&&room.kings?<KingsTV room={room} board={room.kings} command={command} busy={busy}/>:room.game==='pyramid'&&room.pyramid?<PyramidTV room={room} board={room.pyramid} command={command} busy={busy}/>:room.game==='settlers'?<IslandTV room={room}/>:room.quiz?<QuizTV room={room} quiz={room.quiz} now={now}/>:room.duel?<DuelTV room={room} duel={room.duel} go={go}/>:null}

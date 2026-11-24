@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { cheerEmoji } from '../quiz/rules';
 
 // The room API, described once. The server checks requests against the command schemas, and the tests check
 // real responses against the response schemas. A field added, removed or retyped on either side fails CI
@@ -71,6 +72,7 @@ const playerCommands = [
     // Reaction Duel: which draw the shot belongs to.
     draw: z.number().int().optional(),
   }),
+  z.object({ action: z.literal('cheer'), emoji: z.enum(cheerEmoji) }),
   // Null saves the powers for a later round.
   z.object({
     action: z.literal('quizPower'),
@@ -284,6 +286,8 @@ export const RoomSnapshot = z
     revealing: z.boolean(),
     correct: z.number().nullable(),
     question: z.object({ text: z.string(), options: z.array(z.string()) }).strict().nullable(),
+    // Recent reactions, numbered so a screen shows each one once.
+    cheers: z.array(z.object({ n: z.number().int(), from: z.string(), emoji: z.string() }).strict()),
     players: z.array(Player),
   })
   .strict();
