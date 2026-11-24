@@ -13,11 +13,20 @@ const pieceLabel:Record<Piece,string>={road:'Road',settlement:'Settlement',city:
 const goal=6;
 type Command=(c:Record<string,unknown>)=>Promise<boolean>;
 function Cost({piece,hand}:{piece:Piece,hand?:Hand}){
- return <span className="isl-cost" aria-label={Object.entries(costs[piece]).map(([k,n])=>n+' '+k).join(', ')}>{Object.entries(costs[piece]).flatMap(([k,n])=>Array.from({length:n},(_,i)=><span key={k+i} className={hand&&hand[k as Resource]<=i?'missing':''}><ResourceIcon resource={k as Resource}/></span>))}</span>;
+ return <span className="isl-cost" aria-label={Object.entries(costs[piece]).map(([k,n])=>n+' '+resourceLabel[k as Resource]).join(', ')}>{Object.entries(costs[piece]).flatMap(([k,n])=>Array.from({length:n},(_,i)=><span key={k+i} className={hand&&hand[k as Resource]<=i?'missing':''}><ResourceIcon resource={k as Resource}/></span>))}</span>;
 }
 function HandSize({n}:{n:number}){
  return <span className="isl-cards" aria-label={n+(n===1?' card':' cards')}><i/>{n}</span>;
 }
+function ConstructionCard(){
+ return <section className="isl-construction" aria-label="Construction costs"><h3>Construction costs</h3>{pieces.map(p=><div key={p}><PieceIcon piece={p} color="#ffb04a"/><b>{pieceLabel[p]}</b><small>{p==='road'?'0 pts':p==='city'?'2 pts':'1 pt'}</small><Cost piece={p}/></div>)}
+  <p>{resources.map(r=><span key={r}><ResourceIcon resource={r}/>{resourceLabel[r]}</span>)}</p></section>;
+}
+// Big tappable resource tiles, used for trading, discarding and harvesting.
+function Pick({label,note,disabled,chosen,choose}:{label:string,note?:(r:Resource)=>string|number,disabled?:(r:Resource)=>boolean,chosen?:Resource,choose:(r:Resource)=>void}){
+ return <div className="isl-pick" role="group" aria-label={label}>{resources.map(r=><button key={r} aria-pressed={chosen===undefined?undefined:chosen===r} disabled={disabled?.(r)} onClick={()=>choose(r)}><ResourceIcon resource={r}/><b>{resourceLabel[r]}</b>{note&&<small>{note(r)}</small>}</button>)}</div>;
+}
+const mapKey='playtogether.islandMap';
 export function IslandTV({room}:{room:Room}){
  const rolling=useRolling(room);
  const b=room.island;if(!b)return null;
@@ -37,6 +46,7 @@ export function IslandTV({room}:{room:Room}){
    <strong className="isl-points" aria-label={p.score+' points'}>{p.score}<i>★</i></strong>
    <div className="isl-built">{pieces.map(k=><span key={k} aria-label={n[k]+' '+k}><PieceIcon piece={k} color={p.color}/>{n[k]}</span>)}{b.handSizes&&<HandSize n={b.handSizes[p.id]??0}/>}</div>
   </div>})}</aside>
+  <ConstructionCard/>
   <Dice room={room}/>
   {b.offer?<div className="isl-news isl-offer"><b>{player.name} offers</b><ResourceIcon resource={b.offer.give}/><span>{resourceLabel[b.offer.give]} for</span><ResourceIcon resource={b.offer.want}/><span>{resourceLabel[b.offer.want]}</span></div>
   :<p className="isl-news" aria-live="polite">{rolling?'Rolling the dice…':b.event}</p>}
@@ -46,24 +56,28 @@ export function IslandPhone({room,id,command,busy}:{room:Room,id:string,command:
  const b=room.island!,hand=b.hand!,mine=active(b)===id;
  const [mode,setMode]=useState<Piece|'trade'|null>(null),[selected,select]=useState<number>(),[give,setGive]=useState<Resource>('timber'),[want,setWant]=useState<Resource>('grain');
  const [cards,setCards]=useState<Resource[]>([]);
+ const [map,setMap]=useState(()=>localStorage.getItem(mapKey)==='1');
+ const showMap=(on:boolean)=>{localStorage.setItem(mapKey,on?'1':'0');setMap(on)};
  if(!hand)return <p>Connecting to your hand…</p>;
  const player=room.players.find(p=>p.id===active(b));
  const me=room.players.find(p=>p.id===id);
  const setup=b.phase==='settlement'||b.phase==='road',piece:Piece|null=mine?(setup?b.phase as Piece:mode&&mode!=='trade'?mode:null):null;
  const rate=tradeRate(b,id,give),owed=b.owed?.[id]??0,left=piecesLeft(b,id);
+ const trading=mine&&b.phase==='build'&&mode==='trade';
+ const placing=!!piece||(mine&&b.phase==='robber');
  const legal=piece?locations(b,id,piece):[];
  async function act(move:string,more:Record<string,unknown>={}){if(await command({action:'island',move,revision:b.revision,...more})){select(undefined);setMode(null)}}
  const change=(m:typeof mode)=>{setMode(m);select(undefined)};
- return <section className="isl-controller" style={{'--seat':player?.color} as React.CSSProperties}><small className={mine?'mine':''}>{mine?'YOUR TURN':player?.name+'’s turn'}</small><Dice room={room}/><h2>{b.phase==='discard'?(owed?'Discard '+owed+' cards':'Waiting for discards'):mine?b.offer?'Trade offer open':piece?('Place '+(piece==='road'?'a road':piece==='city'?'a city':'a settlement')):captions[b.phase]:b.offer?'Trade offer':'Watch the island'}</h2>
+ return <section className={'isl-controller'+(placing||(map&&!trading)?'':' roomy')} style={{'--seat':player?.color} as React.CSSProperties}><small className={mine?'mine':''}>{mine?'YOUR TURN':player?.name+'’s turn'}</small><Dice room={room}/><h2>{b.phase==='discard'?(owed?'Discard '+owed+' cards':'Waiting for discards'):mine?b.offer?'Trade offer open':piece?('Place '+(piece==='road'?'a road':piece==='city'?'a city':'a settlement')):captions[b.phase]:b.offer?'Trade offer':'Watch the island'}</h2>
  {mine&&piece&&<><p>Tap a highlighted {piece==='road'?'edge':'corner'}, then confirm your placement.</p><IslandMap board={b} players={room.players} piece={piece} legal={legal} selected={selected} pick={select}/><button className="pt-primary" disabled={busy||selected===undefined||!legal.includes(selected)} onClick={()=>act('place',{piece,index:selected})}>Confirm {piece}</button>{!setup&&<button onClick={()=>change(null)}>Back</button>}</>}
- {b.phase==='discard'&&owed>0&&<><div className="isl-buttons">{resources.map(r=><button key={r} disabled={cards.length>=owed||cards.filter(k=>k===r).length>=hand[r]} onClick={()=>setCards([...cards,r])}>{r} · {cards.filter(k=>k===r).length}</button>)}<button onClick={()=>setCards([])}>Clear</button></div><button className="pt-primary" disabled={busy||cards.length!==owed} onClick={()=>act('discard',{cards})}>Discard {cards.length} / {owed}</button></>}
+ {b.phase==='discard'&&owed>0&&<><Pick label="Cards to discard" note={r=>'−'+cards.filter(k=>k===r).length+' of '+hand[r]} disabled={r=>cards.length>=owed||cards.filter(k=>k===r).length>=hand[r]} choose={r=>setCards([...cards,r])}/><button onClick={()=>setCards([])}>Clear</button><button className="pt-primary" disabled={busy||cards.length!==owed} onClick={()=>act('discard',{cards})}>Discard {cards.length} / {owed}</button></>}
  {mine&&b.phase==='robber'&&<><IslandMap board={b} players={room.players} piece="robber" legal={tiles.flatMap((_,i)=>i===robberTile(b)?[]:[i])} selected={selected} pick={select}/><button className="pt-primary" disabled={busy||selected===undefined} onClick={()=>act('robber',{index:selected})}>Move robber here</button></>}
  {mine&&b.phase==='steal'&&<div className="isl-buttons">{b.victims?.map(target=><button key={target} disabled={busy} onClick={()=>act('steal',{target})}>{room.players.find(p=>p.id===target)?.name}</button>)}</div>}
  {mine&&b.phase==='roll'&&<button className="pt-primary isl-roll" disabled={busy} onClick={()=>act('roll')}>Roll dice</button>}
- {mine&&b.phase==='harvest'&&<><p>You rolled seven. Pick one resource from the island.</p><div className="isl-buttons">{resources.map(r=><button key={r} disabled={busy} onClick={()=>act('harvest',{resource:r})}>{r}</button>)}</div></>}
- {b.offer?<><p>{player?.name} offers 1 {b.offer.give} for 1 {b.offer.want}.</p>{mine?<button disabled={busy} onClick={()=>act('cancel')}>Withdraw offer</button>:<button className="pt-primary" disabled={busy||hand[b.offer.want]<1} onClick={()=>act('accept')}>Accept trade</button>}</>:mine&&b.phase==='build'&&!piece&&(mode==='trade'?<><div className="isl-trade">{(['Give','Receive'] as const).map((s,i)=><label key={s}>{s}<select value={i?want:give} onChange={e=>(i?setWant:setGive)(e.target.value as Resource)}>{resources.map(r=><option key={r}>{r}</option>)}</select></label>)}</div><div className="isl-buttons"><button disabled={busy||give===want||hand[give]<1} onClick={()=>act('offer',{give,want})}>Offer 1 for 1 to players</button><button disabled={busy||give===want||hand[give]<rate} onClick={()=>act('bank',{give,want})}>Trade {rate}:1 {rate===4?'at bank':'at port'}</button><button onClick={()=>change(null)}>Back</button></div></>:<><div className="isl-shop">{pieces.map(p=>{const paid=affordable(hand,p),spots=locations(b,id,p).length;return <button className={paid&&spots?'ready':''} disabled={busy||!paid||!spots} key={p} onClick={()=>change(p)}><PieceIcon piece={p} color={me?.color??'#fff'}/><span><b>Build {p}</b><small>{left[p]+' left'}{!left[p]?'':' · '+(!spots?'no free spot':paid?spots+(spots===1?' spot':' spots')+' open':'need more cards')}</small></span><Cost piece={p} hand={hand}/></button>})}</div><div className="isl-buttons"><button onClick={()=>change('trade')}>Trade resources</button><button className="pt-primary" disabled={busy} onClick={()=>act('end')}>End turn</button></div></>)}
+ {mine&&b.phase==='harvest'&&<><p>You rolled seven. Pick one resource from the island.</p><Pick label="Resource to collect" disabled={()=>busy} choose={r=>act('harvest',{resource:r})}/></>}
+ {b.offer?<><div className="isl-deal"><p>{mine?'You give':player?.name+' gives'}<ResourceIcon resource={b.offer.give}/><b>1 {resourceLabel[b.offer.give]}</b></p><p>{mine?'You want':player?.name+' wants'}<ResourceIcon resource={b.offer.want}/><b>1 {resourceLabel[b.offer.want]}</b></p></div>{mine?<button disabled={busy} onClick={()=>act('cancel')}>Withdraw offer</button>:<button className="pt-primary" disabled={busy||hand[b.offer.want]<1} onClick={()=>act('accept')}>Accept trade</button>}</>:mine&&b.phase==='build'&&!piece&&(mode==='trade'?<><div className="isl-trade"><h4>You give</h4><Pick label="You give" chosen={give} choose={setGive} note={r=>'have '+hand[r]} disabled={r=>hand[r]<1}/><h4>You get</h4><Pick label="You get" chosen={want} choose={setWant} disabled={r=>r===give}/></div><div className="isl-buttons"><button disabled={busy||give===want||hand[give]<1} onClick={()=>act('offer',{give,want})}>Offer 1 for 1 to players</button><button disabled={busy||give===want||hand[give]<rate} onClick={()=>act('bank',{give,want})}>Trade {rate}:1 {rate===4?'at bank':'at port'}</button><button onClick={()=>change(null)}>Back</button></div></>:<><div className="isl-shop">{pieces.map(p=>{const paid=affordable(hand,p),spots=locations(b,id,p).length;return <button className={paid&&spots?'ready':''} disabled={busy||!paid||!spots} key={p} onClick={()=>change(p)}><PieceIcon piece={p} color={me?.color??'#fff'}/><span><b>Build {p}</b><small>{left[p]+' left'}{!left[p]?'':' · '+(!spots?'no free spot':paid?spots+(spots===1?' spot':' spots')+' open':'need more cards')}</small></span><Cost piece={p} hand={hand}/></button>})}</div><div className="isl-buttons"><button onClick={()=>{if(hand[give]<1){const first=resources.find(r=>hand[r]>0);if(first)setGive(first)}change('trade')}}>Trade resources</button><button className="pt-primary" disabled={busy} onClick={()=>act('end')}>End turn</button></div></>)}
  {!mine&&!b.offer&&b.phase!=='discard'&&<><p>{player?.name} will {captions[b.phase].toLowerCase()}.</p><div className="isl-costs" aria-label="Construction costs">{pieces.map(p=><div key={p}><PieceIcon piece={p} color={me?.color??'#fff'}/><b>{pieceLabel[p]} <small>{left[p]} left</small></b><Cost piece={p} hand={hand}/></div>)}</div></>}
- {!piece&&!(mine&&b.phase==='robber')&&<IslandMap board={b} players={room.players}/>}
+ {!placing&&!trading&&(map?<IslandMap board={b} players={room.players} hide={()=>showMap(false)}/>:<button className="isl-show-map" onClick={()=>showMap(true)}>Show map</button>)}
  {b.handSizes&&<div className="isl-rivals" aria-label="Cards held by other players">{room.players.filter(p=>p.id!==id&&b.order.includes(p.id)).map(p=><span key={p.id} style={{borderColor:p.color}}><b>{p.name}</b><HandSize n={b.handSizes![p.id]??0}/></span>)}</div>}
- <h3>Your cards<span className="isl-mine">{pieces.map(k=><span key={k} aria-label={left[k]+' '+k+' left'}><PieceIcon piece={k} color={me?.color??'#fff'}/>{left[k]}</span>)}<em>left</em></span></h3><div className="isl-hand">{resources.map(r=><div key={r} className={'isl-card '+r+(hand[r]?'':' empty')}><ResourceIcon resource={r}/><strong>{hand[r]}</strong><small>{r}</small></div>)}</div></section>;
+ <h3>Your cards<span className="isl-mine">{pieces.map(k=><span key={k} aria-label={left[k]+' '+k+' left'}><PieceIcon piece={k} color={me?.color??'#fff'}/>{left[k]}</span>)}<em>left</em></span></h3><div className="isl-hand">{resources.map(r=><div key={r} className={'isl-card '+r+(hand[r]?'':' empty')}><ResourceIcon resource={r}/><strong>{hand[r]}</strong><small>{resourceLabel[r]}</small></div>)}</div></section>;
 }
