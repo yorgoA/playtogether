@@ -40,7 +40,17 @@ export async function playReaction(phone: Phone, reactionMs: () => number, early
           const taken = reactionMs();
           await phone.world.sleep(shown + taken - phone.world.now());
           const tapped = phone.world.now() - shown;
-          if (await phone.command({ action: 'input', round, reactionMs: tapped })) real[round] = tapped;
+          real[round] = tapped;
+          // Like useTap: the first tap is sent until the server has it.
+          while (
+            !over(phone) &&
+            phone.room!.round === round &&
+            !phone.room!.revealing &&
+            !phone.me?.answered
+          ) {
+            if (await phone.command({ action: 'input', round, reactionMs: tapped })) break;
+            await phone.world.sleep(300);
+          }
           break;
         }
         await phone.world.sleep(5);
