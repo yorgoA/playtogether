@@ -32,3 +32,14 @@ export const profileSessions = sqliteTable(
   },
   (t) => [index('profile_sessions_expires_idx').on(t.expires)],
 );
+
+// Counts attempts per key (a name or an address) until `resetAt`, to slow down guessing.
+export const rateLimits = sqliteTable(
+  'rate_limits',
+  {
+    key: text('key').primaryKey(),
+    count: integer('count').notNull(),
+    resetAt: integer('reset_at').notNull(),
+  },
+  (t) => [index('rate_limits_reset_idx').on(t.resetAt)],
+);
