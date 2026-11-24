@@ -26,7 +26,7 @@ function ConstructionCard(){
 export function IslandTV({room}:{room:Room}){
  const b=room.island;if(!b)return null;
  const player=room.players.find(p=>p.id===active(b))!;
- return <section className="isl-table"><div className="isl-water"><IslandMap board={b} players={room.players}/></div><aside className="isl-rail"><div className="isl-sidebar"><small>{room.phase==='paused'?'PAUSED':b.setup<2*b.order.length?'ISLAND SETUP':'CURRENT TURN'}</small><h2>{player.name}</h2><p>{captions[b.phase]}</p><Dice room={room}/><hr/><h3>Race to 6 points</h3>{room.players.map((p,i)=><div key={p.id} className="isl-score"><i style={{background:p.color}}>{i+1}</i><b>{p.name}</b><strong>{p.score}</strong></div>)}<hr/><h3>Latest move</h3><p>{b.event}</p>{b.offer&&<p>Offering {b.offer.give} for {b.offer.want}</p>}</div><ConstructionCard/></aside></section>
+ return <section className="isl-table"><div className="isl-water"><IslandMap board={b} players={room.players}/></div><aside className="isl-rail"><div className="isl-sidebar"><small>{room.phase==='paused'?'PAUSED':b.setup<2*b.order.length?'ISLAND SETUP':'CURRENT TURN'}</small><h2>{player.name}</h2><p>{captions[b.phase]}</p><Dice room={room}/><hr/><h3>Race to 6 points</h3>{room.players.map((p,i)=><div key={p.id} className="isl-score"><i style={{background:p.color}}>{i+1}</i><b>{p.name}{p.standIn?' · bot playing':''}</b><strong>{p.score}</strong></div>)}<hr/><h3>Latest move</h3><p>{b.event}</p>{b.offer&&<p>Offering {b.offer.give} for {b.offer.want}</p>}</div><ConstructionCard/></aside></section>
 }
 export function IslandPhone({room,id,command,busy}:{room:Room,id:string,command:Command,busy:boolean}){
  const b=room.island!,hand=b.hand!,mine=active(b)===id;

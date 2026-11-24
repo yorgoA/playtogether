@@ -47,7 +47,7 @@ export function launch(parent:HTMLElement,read:()=>Snapshot) {
     r.players.forEach((p,i)=>{
      const sprite=this.actors.get(p.id);if(!sprite)return;
      const y=175+i*(275/Math.max(1,r.players.length-1));
-     const goal=p.answered?Math.max(380,1085-Math.min(4000,p.reactionMs??4000)*.17):225;
+     const goal=p.answered&&!p.early?Math.max(380,1085-Math.min(4000,p.reactionMs??4000)*.17):225;
      if(r.phase!=='paused')sprite.x+=(goal-sprite.x)*(reduced?1:1-Math.exp(-delta/170));
      sprite.y=y;
      g.fillStyle(p.answered?0x66d4fa:0x72a4ca,.6).fillTriangle(sprite.x-12,y-4,sprite.x-12,y+4,sprite.x-(p.answered?35:21),y);

@@ -22,7 +22,7 @@ Open the local URL printed in the terminal. The game runs on your computer witho
 
 ### Play with phones on Wi-Fi
 
-Stop the development server with Ctrl+C, then run `npm run dev:lan`. Open the **Network** URL printed by Vite on the host screen before creating the room. The QR code uses that address, so phones on the same Wi-Fi can join. If prompted, allow incoming connections on your private network. Use touch controls on local HTTP. Motion controls may require HTTPS on your phone.
+Stop the development server with Ctrl+C, then run `npm run dev:lan`. Open the local or **Network** URL printed by Vite on the host screen. The QR code uses your computer's Wi-Fi address, so phones on the same Wi-Fi can join. If prompted, allow incoming connections on your private network. Use touch controls on local HTTP. Motion controls may require HTTPS on your phone.
 
 ## Working together
 
