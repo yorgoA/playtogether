@@ -1,4 +1,4 @@
-import { locations, resources, robberTile, tiles, type BoardView } from '../../lib/island/board';
+import { locations, resources, robberTile, tilesOf, type BoardView } from '../../lib/island/board';
 import type { Phone } from './phone';
 
 const over = (phone: Phone) => phone.room?.phase === 'results' || phone.expired;
@@ -83,7 +83,7 @@ function choose(b: BoardView, id: string, random: () => number): Record<string, 
   }
   if (b.order[b.turn] !== id) return b.offer && hand[b.offer.want] ? { move: 'accept' } : null;
   const value = (v: number) =>
-    tiles.reduce((n, t) => n + (t.number && t.vs.includes(v) ? 6 - Math.abs(7 - t.number) : 0), 0);
+    tilesOf(b).reduce((n, t) => n + (t.number && t.vs.includes(v) ? 6 - Math.abs(7 - t.number) : 0), 0);
   if (b.phase === 'settlement')
     return {
       move: 'place',
@@ -91,9 +91,9 @@ function choose(b: BoardView, id: string, random: () => number): Record<string, 
       index: locations(b, id, 'settlement').sort((x, y) => value(y) - value(x))[0],
     };
   if (b.phase === 'road') return { move: 'place', piece: 'road', index: pick(locations(b, id, 'road')) };
-  if (b.phase === 'roll') return { move: 'roll' };
+  if (b.phase === 'roll' || b.phase === 'order') return { move: 'roll' };
   if (b.phase === 'robber')
-    return { move: 'robber', index: pick(tiles.flatMap((_, i) => (i === robberTile(b) ? [] : [i]))) };
+    return { move: 'robber', index: pick(tilesOf(b).flatMap((_, i) => (i === robberTile(b) ? [] : [i]))) };
   if (b.phase === 'steal') return { move: 'steal', target: pick(b.victims!) };
   if (b.offer) return { move: 'cancel' };
   const can = (cost: Record<string, number>) =>
