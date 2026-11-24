@@ -4,7 +4,11 @@ import { z } from 'zod';
 // real responses against the response schemas. A field added, removed or retyped on either side fails CI
 // until this file (and the screens that read it) agree.
 
-export const gameIds = ['quiz', 'reaction', 'turbo', 'settlers', 'pyramid', 'kings'] as const;
+export const gameIds = ['quiz', 'reaction', 'settlers', 'pyramid', 'kings'] as const;
+export const quizTypes = ['accuracy', 'speed', 'balanced', 'minefield', 'jackpot'] as const;
+export const quizPowers = ['smoke', 'half', 'wager', 'thief', 'rush', 'mirror', 'copycat'] as const;
+export type QuizType = (typeof quizTypes)[number];
+export type QuizPower = (typeof quizPowers)[number];
 // Drinking games: opening a room for one needs an adult profile.
 export const adultGames: readonly string[] = ['pyramid', 'kings'];
 export const resources = ['timber', 'clay', 'grain', 'wool', 'ore'] as const;
@@ -59,19 +63,20 @@ const playerCommands = [
   }),
   z.object({ action: z.literal('ready'), ready: z.boolean() }),
   z.object({
-    action: z.literal('drive'),
-    steering: z.number().min(-1).max(1),
-    accelerate: z.number().min(0).max(1),
-    brake: z.number().min(0).max(1),
-    powerUp: z.boolean(),
-    drift: z.boolean().optional(),
-  }),
-  z.object({
     action: z.literal('input'),
     round: z.number().int(),
     value: z.number().optional(),
     reactionMs: z.number().optional(),
     early: z.boolean().optional(),
+    // Reaction Duel: which draw the shot belongs to.
+    draw: z.number().int().optional(),
+  }),
+  // Null saves the powers for a later round.
+  z.object({
+    action: z.literal('quizPower'),
+    round: z.number().int(),
+    power: z.enum(quizPowers).nullable(),
+    target: z.string().max(60).optional(),
   }),
   z.object({
     action: z.literal('island'),
@@ -131,25 +136,6 @@ const Player = z
     answered: z.boolean(),
   })
   .strict();
-
-const Racer = z
-  .object({
-    id: z.string(),
-    progress: z.number(),
-    lane: z.number(),
-    speed: z.number(),
-    boostReadyAt: z.number(),
-    boostUntil: z.number(),
-    finishedAt: z.number().nullable(),
-    // How long the race took this car, once it has finished.
-    timeMs: z.number().nullable(),
-    impactUntil: z.number(),
-    driftCharge: z.number().optional(),
-    driftDirection: z.number().optional(),
-  })
-  .strict();
-
-const Spot = z.object({ at: z.number(), lane: z.number() }).strict();
 
 // What a phone or the host screen may see of an Island Settlers match. `hand` is only the viewer's own;
 // `handSizes` counts everyone's cards without saying which they are.
@@ -233,6 +219,49 @@ const Kings = z
       .nullable(),
   })
   .strict();
+// The standoff. Everything here is public.
+const Duel = z
+  .object({
+    alive: z.array(z.string()),
+    draw: z.number().int(),
+    fallen: z.array(
+      z.object({ id: z.string(), by: z.string().nullable(), why: z.enum(['slow', 'early', 'silent']) }).strict(),
+    ),
+    winner: z.string().nullable(),
+    over: z.boolean(),
+    wins: z.record(z.string(), z.number()),
+  })
+  .strict();
+export type DuelView = z.infer<typeof Duel>;
+// `crossed`, `picks` and the room's `correct` go only to the host screen; `mine` only to its player.
+const Quiz = z
+  .object({
+    stage: z.enum(['intro', 'power', 'question', 'suspense', 'reveal']),
+    theme: z.string(),
+    type: z.enum(quizTypes),
+    chosen: z.array(z.string()),
+    plays: z.array(
+      z
+        .object({ from: z.string(), power: z.enum(quizPowers), to: z.string().nullable(), bounced: z.boolean() })
+        .strict(),
+    ),
+    crossed: z.array(z.number()),
+    picks: z.record(z.string(), z.number()),
+    mine: z
+      .object({
+        powers: z.array(z.enum(quizPowers)),
+        choice: z.enum(quizPowers).nullable(),
+        smoked: z.array(z.number()),
+        removed: z.array(z.number()),
+        until: z.number(),
+        right: z.boolean().nullable(),
+        silent: z.boolean(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export type QuizView = z.infer<typeof Quiz>;
 export type KingsView = z.infer<typeof Kings>;
 export type PyramidView = z.infer<typeof Pyramid>;
 
@@ -241,6 +270,8 @@ export const RoomSnapshot = z
     island: Island.optional(),
     pyramid: Pyramid.optional(),
     kings: Kings.optional(),
+    quiz: Quiz.optional(),
+    duel: Duel.optional(),
     code: z.string().length(4),
     game: Game,
     phase: Phase,
@@ -252,11 +283,6 @@ export const RoomSnapshot = z
     pausedAt: z.number(),
     revealing: z.boolean(),
     correct: z.number().nullable(),
-    // When the race starts, on the server's clock. Cars do not move before it.
-    startsAt: z.number().nullable(),
-    racers: z.array(Racer),
-    pads: z.array(Spot),
-    hazards: z.array(Spot),
     question: z.object({ text: z.string(), options: z.array(z.string()) }).strict().nullable(),
     players: z.array(Player),
   })

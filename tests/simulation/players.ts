@@ -3,74 +3,62 @@ import type { Phone } from './phone';
 
 const over = (phone: Phone) => phone.room?.phase === 'results' || phone.expired;
 
-// Answers every quiz round, tapping again until the phone shows the answer as locked in.
+// Saves every power and answers every quiz question, tapping again until the phone shows it as locked in.
 export async function playQuiz(phone: Phone, choose: (round: number) => number, thinkMs: () => number) {
-  let round = 0;
+  let thought = 0;
   while (!over(phone)) {
-    const room = phone.room!;
-    if (room.phase === 'playing' && !room.revealing && room.round > round) {
-      round = room.round;
-      await phone.world.sleep(thinkMs());
+    const stage = () => (phone.room?.phase === 'playing' ? phone.room.quiz?.stage : undefined);
+    const round = phone.room!.round;
+    if (stage() === 'power' && !phone.room!.quiz!.chosen.includes(phone.id))
+      await phone.command({ action: 'quizPower', round, power: null });
+    else if (stage() === 'question') {
+      if (thought !== round) {
+        thought = round;
+        await phone.world.sleep(thinkMs());
+      }
+      if (stage() === 'question' && phone.room!.round === round && !phone.me?.answered)
+        await phone.command({ action: 'input', round, value: choose(round) });
     }
-    const now = phone.room!;
-    if (now.phase === 'playing' && !now.revealing && now.round === round && round && !phone.me?.answered)
-      await phone.command({ action: 'input', round, value: choose(round) });
     await phone.world.sleep(100);
   }
 }
 
-// Reacts to GO after `reactionMs`, or taps early. Records what the player really did.
+// Shoots `reactionMs` after the signal, or too early. Records what the player really did, by draw.
 export async function playReaction(phone: Phone, reactionMs: () => number, early = false) {
   const real: number[] = [];
-  let round = 0;
+  let shot = 0;
   while (!over(phone)) {
-    const room = phone.room!;
-    if (room.phase === 'playing' && !room.revealing && room.round > round) {
-      round = room.round;
-      if (early) {
+    const { room } = phone;
+    const draw = room?.duel?.draw ?? 0;
+    const open = () =>
+      !over(phone) &&
+      phone.room!.phase === 'playing' &&
+      phone.room!.duel?.draw === draw &&
+      !phone.room!.revealing &&
+      phone.room!.duel.alive.includes(phone.id) &&
+      !phone.me?.answered;
+    // Like useTap: the first tap is sent until the server has it.
+    const fire = async (tap: Record<string, unknown>) => {
+      while (open() && !(await phone.command({ action: 'input', round: room!.round, draw, ...tap })))
         await phone.world.sleep(300);
-        while (!over(phone) && phone.room!.round === round && !phone.me?.answered && !phone.room!.revealing)
-          if (!(await phone.command({ action: 'input', round, early: true }))) await phone.world.sleep(200);
-        continue;
-      }
-      while (!over(phone) && phone.room!.round === round && !phone.room!.revealing) {
-        const signal = phone.room!.signalAt;
-        const shown = signal === null ? undefined : phone.shown.get(signal);
-        if (shown !== undefined && !phone.me?.answered) {
-          const taken = reactionMs();
-          await phone.world.sleep(shown + taken - phone.world.now());
-          const tapped = phone.world.now() - shown;
-          real[round] = tapped;
-          // Like useTap: the first tap is sent until the server has it.
-          while (
-            !over(phone) &&
-            phone.room!.round === round &&
-            !phone.room!.revealing &&
-            !phone.me?.answered
-          ) {
-            if (await phone.command({ action: 'input', round, reactionMs: tapped })) break;
-            await phone.world.sleep(300);
-          }
-          break;
-        }
-        await phone.world.sleep(5);
+    };
+    if (draw > shot && open()) {
+      const signal = phone.room!.signalAt;
+      const shown = signal === null ? undefined : phone.shown.get(signal);
+      if (early) {
+        shot = draw;
+        await phone.world.sleep(300);
+        await fire({ early: true });
+      } else if (shown !== undefined) {
+        shot = draw;
+        await phone.world.sleep(shown + reactionMs() - phone.world.now());
+        real[draw] = phone.world.now() - shown;
+        await fire({ reactionMs: real[draw] });
       }
     }
-    await phone.world.sleep(20);
+    await phone.world.sleep(5);
   }
   return real;
-}
-
-// Holds the pedal and presses Boost whenever it is ready, resending like RaceController.
-export async function playRace(phone: Phone) {
-  while (!over(phone)) {
-    const car = phone.room?.racers.find((r) => r.id === phone.id);
-    if (phone.room?.phase === 'playing' && car && car.finishedAt === null) {
-      const powerUp = car.boostReadyAt <= phone.room.serverTime;
-      await phone.command({ action: 'drive', steering: 0, accelerate: 1, brake: 0, drift: false, powerUp });
-      await phone.world.sleep(500);
-    } else await phone.world.sleep(100);
-  }
 }
 
 // Plays Island Settlers with simple legal moves, from only what the phone can see.

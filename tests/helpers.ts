@@ -6,7 +6,9 @@ export const T0 = 1_000_000;
 export const DROP = 26_000;
 
 export function table(game: string, count: number, rounds = 2) {
-  const room: Room = newRoom('TEST', { game, rounds });
+  const room: Room = newRoom('TEST', { game });
+  // Shorter matches than a host can choose keep tests small.
+  room.rounds = rounds;
   const seats = Array.from({ length: count }, (_, i) => {
     const { extras } = mutate(room, { action: 'join', name: 'P' + i }, '', T0);
     mutate(room, { action: 'ready', ready: true }, extras.playerToken, T0);

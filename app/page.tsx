@@ -8,7 +8,6 @@ import AfterHours from '../components/AfterHours';
 const categories = [
   { id: 'party', title: 'Party', art: 'party' },
   { id: 'board-strategy', title: 'Board & strategy', art: 'settlers' },
-  { id: 'racing', title: 'Racing', art: 'turbo' },
   { id: 'arcade', title: 'Arcade', art: 'mayhem' },
 ];
 const night='After hours';
@@ -30,7 +29,7 @@ export default function Home(){
  if(playing)return <GameSession game={playing} onExit={()=>setPlaying('')}/>;
  // Drinking games show up only for adult profiles.
  const library=viewer?.adult?games:games.filter(g=>g.group!==night);
- const features=['settlers','quiz','turbo'].map(id=>games.find(game=>game.id===id)!),feat=features[index];
+ const features=['settlers','quiz','reaction'].map(id=>games.find(game=>game.id===id)!),feat=features[index];
  const sections=view==='Home'?categories.map(({id,title})=>({id,title,items:games.filter(g=>g.group===title)})):[{id:undefined,title:view,items:view==='Search'?library.filter(g=>(g.name+' '+g.group).toLowerCase().includes(query.trim().toLowerCase())):(view==='Favorites'?favorites:recent).flatMap(id=>library.filter(g=>g.id===id))}];
  const tile=(g:Game)=><article key={g.id} className="shelfItem"><button className="card" onClick={()=>setDetail(g)}><Cover g={g}/><div className="cardBody"><div className="cardLabels"><span>{g.genre}</span><span className={g.live?'live':'soon'}>{g.live?'Playable':'Coming soon'}</span></div><h3>{g.name}</h3><Meta g={g}/></div></button><button className="heartBtn" aria-pressed={favorites.includes(g.id)} aria-label={'Favorite '+g.name} onClick={()=>favorite(g)}><Heart fill={favorites.includes(g.id)?'currentColor':'none'}/></button></article>;
  return <div className="hub"><header className="top"><div className="topInner"><button className="brand" onClick={()=>nav('Home')} aria-label="PlayTogether home"><img src="/favicon.svg" alt=""/><span>Play<span>Together</span></span></button><nav>{[['Search',Search],['Home',House],['Recents',History],['Favorites',Heart]].map(([label,I])=>{const Icon=I as typeof House;return <button key={String(label)} className={view===label?'selected':''} onClick={()=>nav(String(label))}><Icon/>{String(label)}</button>})}</nav><button className="join" aria-label="Open profile" onClick={()=>setProfileOpen(true)}>{viewer?<>{viewer.avatar} {viewer.name}</>:<UserCircle/>}</button></div></header>

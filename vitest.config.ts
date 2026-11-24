@@ -11,5 +11,5 @@ export default defineConfig({
       'cloudflare:workers': here('tests/cloudflare-workers.ts'),
     },
   },
-  test: { include: ['tests/**/*.test.ts'] },
+  test: { include: ['tests/**/*.test.ts'], setupFiles: [here('tests/setup.ts')] },
 });

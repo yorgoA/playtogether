@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { links, Lost, openTable, Phone, type Link, type Table } from './phone';
-import { hostPyramid, playIsland, playKings, playPyramid, playQuiz, playRace, playReaction } from './players';
+import { hostPyramid, playIsland, playKings, playPyramid, playQuiz, playReaction } from './players';
 import type { RoomSnapshot } from '../../lib/contract';
 import { virtualWorld } from './world';
 
@@ -28,9 +28,9 @@ describe.each([1, 2, 3])('full rooms on mixed connections (seed %i)', (seed) => 
   it('12 quiz players', async () => {
     const w = virtualWorld(seed);
     await w.run(async () => {
-      const t = await openTable(w, 'quiz', mix(12), 4);
+      const t = await openTable(w, 'quiz', mix(12), 5);
       await t.start();
-      const correct = (round: number) => stored(w.sqlite).deck[round - 1].correct as number;
+      const correct = (round: number) => stored(w.sqlite).quiz.rounds[round - 1].correct as number;
       await Promise.all(
         t.phones.map((p, i) =>
           playQuiz(
@@ -43,10 +43,10 @@ describe.each([1, 2, 3])('full rooms on mixed connections (seed %i)', (seed) => 
       await settle(t);
       // Even players always answer correctly, odd ones never do. A resent answer must not count twice.
       t.phones.forEach((p, i) => {
-        if (i % 2) expect(p.me!.score).toBe(0);
+        if (i % 2) expect(p.me!.score).toBeLessThanOrEqual(0);
         else {
-          expect(p.me!.score).toBeGreaterThanOrEqual(4 * 500);
-          expect(p.me!.score).toBeLessThanOrEqual(4 * 1000);
+          expect(p.me!.score).toBeGreaterThanOrEqual(5 * 700);
+          expect(p.me!.score).toBeLessThanOrEqual(5 * 1200);
         }
       });
       expect(failures(t)).toEqual([]);
@@ -54,47 +54,32 @@ describe.each([1, 2, 3])('full rooms on mixed connections (seed %i)', (seed) => 
     });
   });
 
-  it('8 reaction players, timed fairly whatever their connection and clock', async () => {
+  it('8 standoff players, timed fairly whatever their connection and clock', async () => {
     const w = virtualWorld(seed);
     await w.run(async () => {
-      const t = await openTable(w, 'reaction', mix(8), 4);
+      const t = await openTable(w, 'reaction', mix(8), 2);
       await t.start();
       const recorded = t.phones.map(() => [] as number[]);
-      const watch = t.phones.map(async (p, i) => {
-        while (p.room?.phase !== 'results') {
-          const me = p.room?.players.find((x) => x.id === p.id);
-          if (me?.reactionMs != null) recorded[i][p.room!.round] = me.reactionMs;
-          await w.sleep(50);
-        }
+      t.phones.forEach((p, i) => {
+        p.watch = (room) => {
+          const me = room.players.find((x) => x.id === p.id);
+          if (me?.reactionMs != null) recorded[i][room.duel!.draw] = me.reactionMs;
+        };
       });
       const real = await Promise.all(
         t.phones.map((p, i) => playReaction(p, () => 180 + w.random() * 120, i === 7)),
       );
-      await Promise.all(watch);
       await settle(t);
       t.phones.slice(0, 7).forEach((p, i) => {
-        for (let round = 1; round <= 4; round++) {
-          expect(real[i][round], 'P' + i + ' tapped in round ' + round).toBeGreaterThan(0);
-          expect(Math.abs(recorded[i][round] - real[i][round])).toBeLessThanOrEqual(1);
-        }
+        expect(real[i][1], 'P' + i + ' shot in the first draw').toBeGreaterThan(0);
+        for (const draw of Object.keys(recorded[i]).map(Number))
+          expect(Math.abs(recorded[i][draw] - real[i][draw])).toBeLessThanOrEqual(1);
       });
+      // Always first to misfire, so never a survivor.
       expect(t.phones[7].me!.score).toBe(0);
+      const wins = Object.values(stored(w.sqlite).duel.wins as Record<string, number>);
+      expect(wins.reduce((a, b) => a + b, 0)).toBe(2);
       expect(failures(t)).toEqual([]);
-      await t.close();
-    });
-  });
-
-  it('4 racers, where a slow connection costs little', async () => {
-    const w = virtualWorld(seed);
-    await w.run(async () => {
-      const t = await openTable(w, 'turbo', [links.wifi, links.wifi, links.busy, links.slow]);
-      await t.start();
-      await Promise.all(t.phones.map(playRace));
-      await settle(t);
-      const race = stored(w.sqlite);
-      for (const car of race.race.cars) expect(car.progress).toBe(3);
-      expect(failures(t)).toEqual([]);
-      expect(busyRefusals(t)).toBe(0);
       await t.close();
     });
   });
@@ -122,7 +107,7 @@ describe('dropped phones', () => {
   it('a quiz goes on when half the room drops, and they come back to their seats', async () => {
     const w = virtualWorld(11);
     await w.run(async () => {
-      const t = await openTable(w, 'quiz', mix(12), 6);
+      const t = await openTable(w, 'quiz', mix(12), 5);
       await t.start();
       const play = t.phones.map((p) =>
         playQuiz(
@@ -148,7 +133,7 @@ describe('dropped phones', () => {
   it('the host screen can drop and return without losing the match', async () => {
     const w = virtualWorld(12);
     await w.run(async () => {
-      const t = await openTable(w, 'quiz', mix(4), 3);
+      const t = await openTable(w, 'quiz', mix(4), 5);
       await t.start();
       const play = t.phones.map((p) =>
         playQuiz(
@@ -188,33 +173,17 @@ describe('dropped phones', () => {
       await t.close();
     });
   });
-  it('a race finishes for the others when one car is abandoned', async () => {
-    const w = virtualWorld(14);
-    await w.run(async () => {
-      const t = await openTable(w, 'turbo', [links.wifi, links.busy, links.wifi]);
-      await t.start();
-      const play = t.phones.map(playRace);
-      await w.sleep(5000);
-      const gone = t.phones[2];
-      gone.offline = true;
-      await t.host.until(() => t.host.room!.players.some((p) => !p.connected), 60_000, 'the drop');
-      await t.host.keepTrying(() => t.host.request({ action: 'kick', playerId: gone.id }));
-      await Promise.all(play.slice(0, 2));
-      expect(t.host.room!.racers).toHaveLength(2);
-      gone.offline = false;
-      await play[2];
-      expect(gone.expired).toBe(true);
-      await t.close();
-    });
-  });
 });
 
 describe('worst moments', () => {
   it.each([5, 20, 40])('12 answers at the same instant all count (database %i ms)', async (databaseMs) => {
     const w = virtualWorld(21, databaseMs);
     await w.run(async () => {
-      const t = await openTable(w, 'quiz', Array(12).fill({ oneWay: 10, jitter: 0, loss: 0 }), 1);
+      const t = await openTable(w, 'quiz', Array(12).fill({ oneWay: 10, jitter: 0, loss: 0 }), 5);
       await t.start();
+      await Promise.all(
+        t.phones.map((p) => p.until(() => p.room?.quiz?.stage === 'question', 30_000, 'the question')),
+      );
       const sent = await Promise.all(t.phones.map((p) => p.command({ action: 'input', round: 1, value: 0 })));
       expect(sent.filter(Boolean)).toHaveLength(12);
       expect(stored(w.sqlite).players.every((p: { answered: boolean }) => p.answered)).toBe(true);
@@ -224,7 +193,7 @@ describe('worst moments', () => {
   it('12 phones scanning the code at once all get a seat', async () => {
     const w = virtualWorld(22, 20);
     await w.run(async () => {
-      const t = await openTable(w, 'quiz', Array(12).fill({ oneWay: 10, jitter: 0, loss: 0 }), 1);
+      const t = await openTable(w, 'quiz', Array(12).fill({ oneWay: 10, jitter: 0, loss: 0 }), 5);
       expect(busyRefusals(t)).toBe(0);
       expect(stored(w.sqlite).players).toHaveLength(12);
       await t.close();
@@ -237,57 +206,21 @@ async function goDelays(link: Link, seed: number) {
   const w = virtualWorld(seed);
   const delays: number[] = [];
   await w.run(async () => {
-    const t = await openTable(w, 'reaction', Array(8).fill({ ...link, loss: 0 }), 4);
+    const t = await openTable(w, 'reaction', Array(8).fill({ ...link, loss: 0 }), 2);
     await t.start();
-    await Promise.all(t.phones.map((p) => playReaction(p, () => 200)));
+    await Promise.all(t.phones.map((p) => playReaction(p, () => 200 + w.random() * 50)));
     for (const p of t.phones) for (const [signal, at] of p.shown) delays.push(Math.abs(at - signal));
     await t.close();
   });
-  expect(delays.length).toBe(32);
+  // Eight phones, and several draws, fewer than seven a round when shots tie.
+  expect(delays.length).toBeGreaterThanOrEqual(8 * 10);
   return Math.max(...delays);
-}
-async function raceTimes(link: Link, seed: number) {
-  const w = virtualWorld(seed);
-  return w.run(async () => {
-    const t = await openTable(w, 'turbo', Array(4).fill(link));
-    await t.start();
-    await Promise.all(t.phones.map(playRace));
-    await t.close();
-    const room = stored(w.sqlite);
-    return room.race.cars.map((c: { finishedAt: number }) => c.finishedAt - room.started) as number[];
-  });
 }
 describe.each([1, 2, 3])('timing (seed %i)', (seed) => {
   it('shows GO within 60 ms of the TV on Wi-Fi, busy or not', async () => {
     expect(await goDelays(links.wifi, seed)).toBeLessThan(60);
     vi.restoreAllMocks();
     expect(await goDelays(links.busy, seed)).toBeLessThan(60);
-  });
-  it('every phone knows about the race before it starts, however slow', async () => {
-    const w = virtualWorld(seed);
-    await w.run(async () => {
-      const left: number[] = [];
-      const t = await openTable(w, 'turbo', Array(4).fill(links.slow), 1);
-      for (const p of t.phones) {
-        let noticed = false;
-        p.watch = (room) => {
-          if (noticed || room.startsAt === null) return;
-          noticed = true;
-          left.push(room.startsAt - w.now());
-        };
-      }
-      await t.start();
-      await t.close();
-      expect(left).toHaveLength(4);
-      expect(Math.min(...left)).toBeGreaterThan(0);
-    });
-  });
-  it('a very slow connection costs a racer less than four seconds in a 45 second race', async () => {
-    const wifi = await raceTimes(links.wifi, seed);
-    vi.restoreAllMocks();
-    const slow = await raceTimes(links.slow, seed);
-    // The same car each time, so the starting lane does not matter.
-    wifi.forEach((time, car) => expect(slow[car] - time).toBeLessThan(4000));
   });
 });
 
@@ -313,12 +246,12 @@ describe('slow connections and lost messages', () => {
     };
   }
   it.each([
-    ['in a room with space', 12],
+    ['in a room with space', 3],
     ['for the last seat', 1],
   ])('a player whose join reply was lost can tap Join again, %s', async (_label, spaces) => {
     const w = virtualWorld(23);
     await w.run(async () => {
-      const t = await openTable(w, 'turbo', Array(spaces === 1 ? 3 : 1).fill(links.wifi));
+      const t = await openTable(w, 'settlers', Array(spaces === 1 ? 3 : 1).fill(links.wifi));
       const world = losingFirst(w, (init) => String(init.body).includes('"join"'), true);
       const ana = new Phone(world, t.code, links.wifi, t.stats);
       await ana.join('Ana').catch((error) => expect(error).toBeInstanceOf(Lost));
@@ -335,13 +268,18 @@ describe('slow connections and lost messages', () => {
     for (const arrives of [false, true]) {
       const w = virtualWorld(24);
       await w.run(async () => {
-        const t = await openTable(w, 'reaction', [links.wifi, links.wifi], 1);
+        const t = await openTable(w, 'reaction', [links.wifi, links.wifi], 2);
         await t.start();
         const world = losingFirst(w, (init) => String(init.body).includes('reactionMs'), arrives);
         (t.phones[0] as { world: unknown }).world = world;
-        const [real] = await Promise.all(t.phones.map((p) => playReaction(p, () => 200)));
+        let seen: number | undefined;
+        t.host.watch = (room) => {
+          if (room.duel?.draw === 1 && room.revealing)
+            seen = room.players.find((x) => x.id === t.phones[0].id)?.reactionMs;
+        };
+        const [real] = await Promise.all(t.phones.map((p) => playReaction(p, () => 200 + w.random() * 20)));
         await settle(t);
-        expect(t.phones[0].me!.reactionMs).toBe(real[1]);
+        expect(seen).toBe(Math.round(real[1]));
         await t.close();
       });
       vi.restoreAllMocks();
