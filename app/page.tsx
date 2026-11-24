@@ -6,10 +6,10 @@ import GameSession from '../components/GameSession';
 import HubProfile, {type Viewer} from '../components/HubProfile';
 import AfterHours from '../components/AfterHours';
 const categories = [
-  { id: 'party', title: 'Party' },
-  { id: 'board-strategy', title: 'Board & strategy' },
-  { id: 'racing', title: 'Racing' },
-  { id: 'arcade', title: 'Arcade' },
+  { id: 'party', title: 'Party', art: 'party' },
+  { id: 'board-strategy', title: 'Board & strategy', art: 'settlers' },
+  { id: 'racing', title: 'Racing', art: 'turbo' },
+  { id: 'arcade', title: 'Arcade', art: 'mayhem' },
 ];
 function Meta({g}:{g:Game}){return <div className="meta"><span><Users/>{g.players} players</span><i/><span><Timer/>{g.duration}</span></div>}
 function Cover({g}:{g:Game}){let words=g.name.split(' ');return <div className={'cover '+g.art} style={{backgroundImage:'url(/art/'+g.art+'.webp)'}}><span className="coverLogo">{words[0]}<br/>{words[1]}</span></div>}
@@ -33,7 +33,11 @@ export default function Home(){
  <main className="main">{view==='Home'&&<><div className="sectionTop"><h1>Game hub<span>.</span></h1><button className="how" onClick={()=>setHelp(true)}><HelpCircle/>How to play</button></div>
  <section onFocusCapture={()=>setHeroFocus(true)} onBlurCapture={e=>setHeroFocus(e.currentTarget.contains(e.relatedTarget))} className={'hero hero-'+feat.art} style={{backgroundImage:'url(/art/'+feat.art+'.webp)'}}><div className="heroShade"/><div className="heroContent"><div className="kicker"><span className="signal"><AudioLines size={16}/></span> FEATURED GAME</div><h2>{feat.name.split(' ')[0]} <em>{feat.name.split(' ')[1]}</em></h2><p>{feat.description}</p><Meta g={feat}/><div className="actions">{feat.live&&<button className="primary" onClick={()=>play(feat)}><Play fill="currentColor"/>Play now</button>}<button className="secondary" onClick={()=>setDetail(feat)}><Info/>Game details</button></div></div><div className="heroPager"><button aria-label={paused?"Resume carousel":"Pause carousel"} onClick={()=>setPaused(!paused)}>{paused?<Play/>:<Pause/>}</button><button aria-label="Previous featured game" onClick={()=>setIndex((index+2)%3)}><ChevronLeft/></button><span>0{index+1} <b>/ 03</b></span><button aria-label="Next featured game" onClick={()=>setIndex((index+1)%3)}><ChevronRight/></button></div></section>
  <nav className="categoryNav" aria-label="Game categories">
-   {categories.map(({id,title})=><a key={id} href={'#'+id}>{title}</a>)}
+   {categories.map(({id,title,art})=>(
+     <a key={id} href={'#'+id} style={{backgroundImage:`linear-gradient(0deg, #101116 0%, #101116cc 26%, #1011161a 80%), url(/art/${art}.webp)`}}>
+       {title}
+     </a>
+   ))}
  </nav>
  {resume&&games.some(g=>g.id===resume)&&<button className="resume" onClick={()=>setPlaying(resume)}><Gamepad2/>Continue playing · {games.find(g=>g.id===resume)?.name}</button>}</>}
  {view==='Search'&&<input autoFocus type="search" className="hubSearch" aria-label="Search games" placeholder="Search games or categories" value={query} onChange={e=>setQuery(e.target.value)}/>}
