@@ -12,6 +12,7 @@ import { GameError, games, type Game, type RoundData } from './games';
 
 import { gameIds, type RoomSnapshot } from '../contract';
 import { claimPyramid, flipPyramid, newPyramid, pyramidView, resolvePyramid, type Pyramid } from './pyramid';
+import { kingsMove, kingsOver, kingsView, leaveKings, newKings, nextKings, type Kings } from './kings';
 import { bankLeft, islandMove, startIsland, totalPoints } from './island';
 import { active, goal, handSize, pointsFor, resources, type Island } from '../island/board';
 import { botMove } from './island-bot';
@@ -44,6 +45,7 @@ export type Room = {
   botAt?: number;
   island?: Island;
   pyramid?: Pyramid;
+  kings?: Kings;
   revealing?: boolean;
   race?: ReturnType<typeof createRace>;
   started: number;
@@ -123,7 +125,8 @@ function advanceBots(r: Room, now: number) {
   return false;
 }
 function advance(r: Room, now: number) {
-  if (r.phase !== 'playing' || r.game === 'settlers' || r.game === 'pyramid') return false;
+  if (r.phase !== 'playing' || r.game === 'settlers' || r.game === 'pyramid' || r.game === 'kings')
+    return false;
   if (r.game === 'turbo' && r.race) {
     advanceRace(r.race, Math.min(now, r.deadline));
     const scores = raceScores(r.race, r.started);
@@ -155,6 +158,7 @@ function lobby(r: Room) {
   delete r.race;
   delete r.island;
   delete r.pyramid;
+  delete r.kings;
   r.players.forEach((p) => {
     p.answered = false;
     p.reactionMs = undefined;
@@ -195,6 +199,11 @@ function removePlayer(r: Room, p: Player, now: number) {
     if (r.players.length < 2) r.phase = 'results';
     return;
   }
+  if (r.kings) {
+    leaveKings(r.kings, p.id);
+    if (r.players.length < 2 || kingsOver(r.kings)) r.phase = 'results';
+    return;
+  }
   // While paused, the deadline moves forward on resume.
   if (r.race || r.revealing) return;
   revealWhenAllAnswered(r, r.phase === 'paused' ? r.pausedAt : now);
@@ -204,6 +213,8 @@ function start(r: Room, now: number) {
     throw new GameError('Island Settlers needs two to four players.');
   if (r.game === 'pyramid' && r.players.length < 2)
     throw new GameError('Pyramid needs two to eight players.');
+  if (r.game === 'kings' && r.players.length < 2)
+    throw new GameError('Kings Cup needs two to eight players.');
   if (!r.players.some((p) => !p.bot && !p.standIn)) throw new GameError('Join with a phone before starting.');
   if (r.players.some((p) => !p.ready || !(p.standIn || connected(p, now))))
     throw new GameError('Every player must be connected and ready.');
@@ -211,6 +222,10 @@ function start(r: Room, now: number) {
   r.phase = 'playing';
   if (r.game === 'pyramid') {
     r.pyramid = newPyramid(r.players.map((p) => p.id));
+    return;
+  }
+  if (r.game === 'kings') {
+    r.kings = newKings(r.players.map((p) => p.id));
     return;
   }
   r.deck = games[r.game].prepare(r.rounds);
@@ -331,9 +346,20 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
       const outcome = resolvePyramid(r.pyramid, player.id, command.call === true, command.index);
       r.players.find((p) => p.id === outcome.loser)!.score -= outcome.points;
     }
+  } else if (action === 'kings' && player) {
+    if (!r.kings || r.phase !== 'playing') throw new GameError('Kings Cup is not active.', 409);
+    const poured = kingsMove(
+      r.kings,
+      player.id,
+      command,
+      r.players.filter((p) => connected(p, now)).map((p) => p.id),
+    );
+    for (const p of r.players) if (poured?.drinkers.includes(p.id)) p.score -= poured.amount;
+    if (kingsOver(r.kings)) r.phase = 'results';
   } else if (action === 'input' && player) {
     if (r.game === 'settlers') throw new GameError('Use the island controls.');
     if (r.game === 'pyramid') throw new GameError('Use the Pyramid controls.');
+    if (r.game === 'kings') throw new GameError('Use the Kings Cup controls.');
     if (r.game === 'turbo') throw new GameError('Use your driving controls.');
     if (r.phase !== 'playing' || r.revealing || command.round !== r.round)
       throw new GameError('This round is closed.', 409);
@@ -402,6 +428,12 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
       case 'pyramidFlip':
         if (!r.pyramid || r.phase !== 'playing') throw new GameError('Pyramid is not active.', 409);
         if (flipPyramid(r.pyramid, command.index)) r.phase = 'results';
+        break;
+      case 'kingsNext':
+        if (!r.kings || r.phase !== 'playing' || command.seq !== r.kings.seq)
+          throw new GameError('The table has moved on.', 409);
+        nextKings(r.kings);
+        if (kingsOver(r.kings)) r.phase = 'results';
         break;
       case 'restart':
         start(r, now);
@@ -482,6 +514,7 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
   return {
     island,
     pyramid: r.pyramid ? pyramidView(r.pyramid, viewer?.id) : undefined,
+    kings: r.kings ? kingsView(r.kings) : undefined,
     code: r.code,
     game: r.game,
     phase: r.phase,

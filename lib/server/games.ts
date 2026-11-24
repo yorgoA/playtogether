@@ -94,6 +94,15 @@ export const games: Record<Game, GameModule> = {
       throw new GameError('Use the Pyramid controls.');
     },
   },
+  kings: {
+    maxPlayers: 8,
+    duration: 0,
+    prepare: () => [],
+    signalDelay: () => 0,
+    score() {
+      throw new GameError('Use the Kings Cup controls.');
+    },
+  },
   settlers: {
     maxPlayers: 4,
     duration: 0,

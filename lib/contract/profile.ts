@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { gameIds } from './rooms';
 
 // The profile API (/api/profile). Sessions travel in an HttpOnly cookie, never in a body.
 
@@ -33,6 +34,6 @@ export const ProfileResponse = z.object({ profile: PublicProfile.nullable() }).s
 // 200 for GET /api/after-hours. 403 when the profile is not an adult.
 export const AfterHoursResponse = z
   .object({
-    games: z.array(z.object({ name: z.string(), rule: z.string(), rounds: z.array(z.string()) }).strict()),
+    games: z.array(z.enum(gameIds)),
   })
   .strict();
