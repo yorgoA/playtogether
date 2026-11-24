@@ -1,8 +1,9 @@
 import { env } from 'cloudflare:workers';
-import { adultGames, CreateRoomRequest, RoomCommand } from '../contract';
+import { adultGames, CreateRoomRequest, gameIds, RoomCommand } from '../contract';
 import { readText } from './body';
 import { GameError } from './games';
 import { current, publicProfile } from './profiles';
+import { findQuestions, type Question } from './trivia';
 import { mutate, newRoom, snapshot, type Room } from './session';
 
 const ttl = 24 * 60 * 60 * 1000;
@@ -74,6 +75,7 @@ export async function handle(req: Request, rawCode: string) {
     const checked = RoomCommand.safeParse(command);
     if (!checked.success) invalid(checked.error);
     if (command.action === 'configure') await checkAge(req, command.game);
+    let questions: Question[] | undefined;
     for (let i = 0; i < 12; i++) {
       const now = Date.now();
       const row = await store
@@ -82,7 +84,20 @@ export async function handle(req: Request, rawCode: string) {
         .first<{ state: string; version: number }>();
       if (!row) throw new GameError('Room code not found.', 404);
       const r: Room = JSON.parse(row.state);
-      const { dirty, extras } = mutate(r, command, token, now);
+      // Rooms opened before a game was removed, or before its rules changed shape.
+      if (!gameIds.includes(r.game)) throw new GameError('Room code not found.', 404);
+      if (
+        (r.phase === 'playing' || r.phase === 'paused') &&
+        ((r.game === 'quiz' && !r.quiz) || (r.game === 'reaction' && !r.duel))
+      )
+        r.phase = 'lobby';
+      const starting = command.action === 'start' || command.action === 'restart';
+      if (starting && r.game === 'quiz' && token === r.hostToken && !questions) {
+        questions = await findQuestions(now);
+        // Fetching takes a moment, so look at the room again.
+        continue;
+      }
+      const { dirty, extras } = mutate(r, command, token, now, questions);
       if (dirty) {
         const result = await store
           .prepare('UPDATE rooms SET state=?, version=version+1, expires=? WHERE code=? AND version=?')

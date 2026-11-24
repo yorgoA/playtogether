@@ -147,7 +147,8 @@ export class Phone {
     while (!this.stopped) {
       try {
         const { room } = await this.request();
-        wait = room.phase === 'playing' && (room.game === 'turbo' || room.game === 'reaction') ? 250 : 650;
+        wait =
+          room.phase !== 'playing' ? 650 : room.game === 'reaction' ? 250 : room.game === 'quiz' ? 400 : 650;
       } catch (error) {
         if (error instanceof Refused && [401, 403, 404, 410].includes(error.status)) {
           this.expired = true;

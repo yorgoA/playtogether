@@ -40,7 +40,9 @@ describe('what the screens send is accepted', () => {
     { action: 'input', round: 2, value: 3 },
     { action: 'input', round: 2, early: true },
     { action: 'input', round: 2, reactionMs: 231.5 },
-    { action: 'drive', steering: -0.5, accelerate: 1, brake: 0, powerUp: false, drift: true },
+    { action: 'input', round: 2, draw: 3, early: true },
+    { action: 'quizPower', round: 2, power: null },
+    { action: 'quizPower', round: 2, power: 'smoke', target: 'someone' },
     { action: 'island', move: 'roll', revision: 4 },
     { action: 'island', move: 'place', revision: 4, piece: 'road', index: 12 },
     { action: 'island', move: 'discard', revision: 4, cards: ['ore', 'ore', 'wool'] },
@@ -58,7 +60,7 @@ describe('what the screens send is accepted', () => {
     ...['addBot', 'start', 'restart', 'pause', 'resume', 'lobby', 'end', 'view'].map((action) => ({
       action,
     })),
-    { action: 'configure', game: 'turbo' },
+    { action: 'configure', game: 'reaction' },
     { action: 'configure', rounds: 7 },
     { action: 'kick', playerId: 'abc' },
     { action: 'standIn', playerId: 'abc' },
@@ -94,16 +96,6 @@ describe('malformed requests are refused with the field named', () => {
   it.each([
     ['no action', {}, /Invalid request/],
     ['an unknown action', { action: 'explode' }, /Invalid request: action/],
-    [
-      'steering as text',
-      { action: 'drive', steering: 'left', accelerate: 1, brake: 0, powerUp: false },
-      /steering/,
-    ],
-    [
-      'steering out of range',
-      { action: 'drive', steering: 5, accelerate: 1, brake: 0, powerUp: false },
-      /steering/,
-    ],
     ['a missing round', { action: 'input', value: 1 }, /round/],
     ['a kick without a player', { action: 'kick' }, /playerId/],
     [
@@ -147,43 +139,42 @@ describe('what the server sends fits the contract', () => {
     fits(RoomResponse, await seen.json());
   });
 
-  it.each([
-    ['a quiz in every phase', 'quiz'],
-    ['a reaction duel in every phase', 'reaction'],
-  ] as const)('%s', (_label, game) => {
-    const { room, host, play } = table(game, 2, 1);
-    fits(RoomSnapshot, snapshot(room, T0));
+  it('for a quiz in every stage, for each viewer', () => {
+    const { room, host, play, seats } = table('quiz', 2, 1);
+    const check = (now: number) => {
+      for (const token of ['', room.hostToken, seats[0].token])
+        fits(RoomSnapshot, snapshot(room, now, token));
+    };
+    check(T0);
     host({ action: 'start' });
-    fits(RoomSnapshot, snapshot(room, T0));
-    play(
-      0,
-      game === 'quiz'
-        ? { action: 'input', round: 1, value: room.deck[0].correct }
-        : { action: 'input', round: 1, early: true },
-    );
-    play(
-      1,
-      game === 'quiz' ? { action: 'input', round: 1, value: 0 } : { action: 'input', round: 1, early: true },
-    );
-    fits(RoomSnapshot, snapshot(room, T0)); // revealing
-    host({ action: 'pause' }, T0 + 10);
-    fits(RoomSnapshot, snapshot(room, T0 + 20)); // paused
-    host({ action: 'resume' }, T0 + 30);
-    host({ action: 'view' }, room.deadline + 1);
-    expect(room.phase).toBe('results');
-    fits(RoomSnapshot, snapshot(room, room.deadline + 1));
+    let now = T0;
+    const stages = new Set<string>();
+    while (room.phase === 'playing') {
+      stages.add(room.quiz!.stage);
+      check(now);
+      if (room.quiz!.stage === 'power')
+        play(0, { action: 'quizPower', round: 1, power: 'smoke', target: seats[1].id }, now);
+      if (room.quiz!.stage === 'question') play(0, { action: 'input', round: 1, value: 0 }, now);
+      host({ action: 'pause' }, now);
+      check(now);
+      host({ action: 'resume' }, now);
+      now = room.deadline;
+      host({ action: 'view' }, now);
+    }
+    expect([...stages]).toEqual(['intro', 'power', 'question', 'suspense', 'reveal']);
+    check(now);
   });
 
-  it('for a race, with cars on the track', () => {
-    const { room, host, play } = table('turbo', 3);
+  it('for a standoff in every phase', () => {
+    const { room, host, play } = table('reaction', 3, 1);
+    fits(RoomSnapshot, snapshot(room, T0));
     host({ action: 'start' });
-    for (let i = 0; i < 3; i++)
-      play(i, { action: 'drive', steering: 0.3, accelerate: 1, brake: 0, powerUp: false, drift: true }, T0);
-    host({ action: 'view' }, T0 + 4000);
-    const view = snapshot(room, T0 + 4000);
-    expect(view.racers).toHaveLength(3);
-    expect(view.pads.length + view.hazards.length).toBeGreaterThan(0);
-    fits(RoomSnapshot, view);
+    fits(RoomSnapshot, snapshot(room, T0));
+    for (const i of [0, 1])
+      play(i, { action: 'input', round: 1, draw: 1, reactionMs: 200 + i }, room.signalAt + 300);
+    play(2, { action: 'input', round: 1, draw: 1, early: true }, room.signalAt + 300);
+    expect(room.revealing).toBe(true);
+    fits(RoomSnapshot, snapshot(room, room.signalAt + 301));
   });
 
   it('for an island match, for each viewer', () => {
