@@ -263,6 +263,25 @@ describe.each([1, 2, 3])('timing (seed %i)', (seed) => {
     vi.restoreAllMocks();
     expect(await goDelays(links.busy, seed)).toBeLessThan(60);
   });
+  it('every phone knows about the race before it starts, however slow', async () => {
+    const w = virtualWorld(seed);
+    await w.run(async () => {
+      const left: number[] = [];
+      const t = await openTable(w, 'turbo', Array(4).fill(links.slow), 1);
+      for (const p of t.phones) {
+        let noticed = false;
+        p.watch = (room) => {
+          if (noticed || room.startsAt === null) return;
+          noticed = true;
+          left.push(room.startsAt - w.now());
+        };
+      }
+      await t.start();
+      await t.close();
+      expect(left).toHaveLength(4);
+      expect(Math.min(...left)).toBeGreaterThan(0);
+    });
+  });
   it('a very slow connection costs a racer less than four seconds in a 45 second race', async () => {
     const wifi = await raceTimes(links.wifi, seed);
     vi.restoreAllMocks();

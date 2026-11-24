@@ -1,15 +1,16 @@
 "use client";
 import {useEffect,useRef,useState} from 'react';
-import {api,type Room,type Seat} from '@/lib/controller/room';
+import {api,countdown,resultText,type Room,type Seat} from '@/lib/controller/room';
 import MotionControls from './MotionControls';
 type Mode='touch'|'motion'|'assisted';
 const neutral={steering:0,accelerate:0,brake:0,powerUp:false};
-export default function RaceController({seat,room}:{seat:Seat,room:Room}){
+export default function RaceController({seat,room,now}:{seat:Seat,room:Room,now:number}){
  const [mode,setMode]=useState<Mode>('touch'),[warning,setWarning]=useState(''),[pressed,setPressed]=useState<string[]>([]);
  const keys=useRef(new Set<string>()),steer=useRef(0),boost=useRef(false),tapped=useRef(new Set<string>()),flush=useRef(()=>{}),modeRef=useRef(mode);
  modeRef.current=mode;
  const car=room.racers?.find(r=>r.id===seat.id);
- const finished=car?.finishedAt!=null;
+ const finished=car?.finishedAt!=null,me=room.players.find(p=>p.id===seat.id);
+ const count=room.phase==='playing'?countdown(room.startsAt,now):null;
  useEffect(()=>{
   const active=room.phase==='playing'&&!finished;
   keys.current.clear();tapped.current.clear();boost.current=false;setPressed([]);
@@ -37,8 +38,8 @@ export default function RaceController({seat,room}:{seat:Seat,room:Room}){
  },[seat,room.phase,finished]);
  function change(key:string,down:boolean){if(down){keys.current.add(key);tapped.current.add(key)}else keys.current.delete(key);setPressed(Array.from(keys.current));flush.current()}
  const control=(label:string)=> <button key={label} type="button" data-active={pressed.includes(label)} onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);change(label,true)}} onPointerUp={()=>change(label,false)} onPointerCancel={()=>change(label,false)} onLostPointerCapture={()=>change(label,false)} onKeyDown={e=>{if([' ','Enter'].includes(e.key)){e.preventDefault();change(label,true)}}} onKeyUp={e=>{if([' ','Enter'].includes(e.key))change(label,false)}}>{label==='Left'?'◀':label==='Right'?'▶':label}<span className="pt-sr">{label==='Left'||label==='Right'?label:''}</span></button>;
- return <section className="pt-driver">{room.phase==='playing'&&!finished&&<><div className="pt-row"><b>Lap {Math.min(3,Math.floor(car?.progress??0)+1)} / 3</b><small>{mode==='touch'?'TOUCH':mode==='assisted'?'ASSISTED':'MOTION'}</small></div><div className="pt-pedals">{mode==='touch'&&[control('Left'),control('Right')]}{mode!=='assisted'&&control('Accelerate')}{control('Brake')}{control('Drift')}<button onClick={()=>{boost.current=true;flush.current();navigator.vibrate?.(20)}} disabled={(car?.boostReadyAt??0)>room.serverTime}>Boost</button></div></>}
- {finished&&<p>Finish line crossed! Watch the TV for results.</p>}
+ return <section className="pt-driver">{room.phase==='playing'&&!finished&&<>{count&&<p className="race-count flat" role="status">{count}</p>}<div className="pt-row"><b>Lap {Math.min(3,Math.floor(car?.progress??0)+1)} / 3</b><small>{mode==='touch'?'TOUCH':mode==='assisted'?'ASSISTED':'MOTION'}</small></div><div className="pt-pedals">{mode==='touch'&&[control('Left'),control('Right')]}{mode!=='assisted'&&control('Accelerate')}{control('Brake')}{control('Drift')}<button onClick={()=>{boost.current=true;flush.current();navigator.vibrate?.(20)}} disabled={(car?.boostReadyAt??0)>room.serverTime}>Boost</button></div></>}
+ {finished&&<p>Finished in {me&&resultText(room,me)}! Watch the TV for results.</p>}
  {warning&&<p role="status">{warning}</p>}
  {room.phase==='playing'&&!finished&&<p>{(car?.driftCharge??0)>=800?'Drift charged · release Drift to boost': 'Hold Drift and steer at speed to charge a boost.'}</p>}
  <MotionControls racing onSteer={v=>steer.current=v} onMode={setMode}/></section>

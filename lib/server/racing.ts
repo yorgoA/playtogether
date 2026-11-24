@@ -10,6 +10,8 @@ export const boostPads = [
   { at: 0.72, lane: 0.65 },
 ];
 export const raceDuration = 180000;
+// Three, two, one, after a moment for every phone to notice the race.
+export const raceCountdown = 4000;
 const laps = 3,
   stepMs = 50;
 export type Drive = {
@@ -139,6 +141,9 @@ export function raceScores(race: Race, started: number) {
     ]),
   );
 }
-export function publicRace(race: Race) {
-  return race.cars.map(({ input: _input, inputAt: _inputAt, ...car }) => car);
+export function publicRace(race: Race, started: number) {
+  return race.cars.map(({ input: _input, inputAt: _inputAt, ...car }) => ({
+    ...car,
+    timeMs: car.finishedAt === null ? null : Math.round(car.finishedAt - started),
+  }));
 }
