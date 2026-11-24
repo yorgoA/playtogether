@@ -3,6 +3,14 @@ import {
   tradeRate,
   active,
   affordable,
+  affordsDev,
+  devCards,
+  devCost,
+  longestRoadOwner,
+  playable,
+  pointsFor,
+  secretPoints,
+  shuffledDeck,
   costs,
   emptyHand,
   locations,
@@ -10,6 +18,7 @@ import {
   orderRollers,
   shuffledLayout,
   tilesOf,
+  type DevCard,
   type Island,
   type Resource,
   type Piece,
@@ -38,9 +47,13 @@ export function startIsland(order: string[]): Island {
     layout: shuffledLayout(),
     phase: 'order',
     orderRolls: {},
+    deck: shuffledDeck(),
+    dev: {},
+    knights: {},
     event: 'Everyone rolls. The highest roll starts.',
   };
 }
+export const totalPoints = (b: Island, id: string) => pointsFor(b, id) + secretPoints(b.dev?.[id]);
 export function islandMove(b: Island, id: string, name: string, c: Record<string, unknown>) {
   const reject = (msg: string): never => {
     throw new GameError(msg, 409);
@@ -80,17 +93,25 @@ export function islandMove(b: Island, id: string, name: string, c: Record<string
       if (
         !Object.hasOwn(costs, piece) ||
         !Number.isInteger(index) ||
-        !(setup ? piece === b.phase : b.phase === 'build') ||
+        !(setup ? piece === b.phase : b.freeRoads ? piece === 'road' : b.phase === 'build') ||
         !locations(b, id, piece).includes(index)
       )
         return reject('Choose a highlighted location.');
-      if (!setup) {
+      if (b.freeRoads) b.freeRoads--;
+      else if (!setup) {
         if (!affordable(hand, piece)) return reject('You need more resources.');
         for (const [r, n] of Object.entries(costs[piece])) hand[r as Resource] -= n;
       }
       if (piece === 'road') b.roads[index] = id;
       else b.homes[index] = { id, city: piece === 'city' };
       b.event = name + ' built a ' + piece + '.';
+      if (b.freeRoads && !locations(b, id, 'road').length) b.freeRoads = 0;
+      if (piece !== 'city') {
+        const before = b.longestRoad;
+        b.longestRoad = longestRoadOwner(b);
+        if (b.longestRoad === id && before !== id) b.event += ' They take the longest road!';
+        else if (before && before !== b.longestRoad) b.event += ' The longest road is broken!';
+      }
       if (b.phase === 'settlement') {
         b.anchor = index;
         b.phase = 'road';
@@ -124,6 +145,56 @@ export function islandMove(b: Island, id: string, name: string, c: Record<string
         b.phase = 'settlement';
         b.event += ' The highest roll starts.';
       }
+    } else if (b.freeRoads && c.move !== 'cancel') {
+      // Only roads can be placed until both free ones are down, or the rest are given up.
+      if (c.move !== 'skipRoads') return reject('Place your free roads first.');
+      b.freeRoads = 0;
+    } else if (c.move === 'buyDev' && b.phase === 'build') {
+      if (!b.deck?.length) return reject('There are no development cards left.');
+      if (!affordsDev(hand)) return reject('You need more resources.');
+      for (const [r, n] of Object.entries(devCost)) hand[r as Resource] -= n;
+      ((b.dev ??= {})[id] ??= []).push({ kind: b.deck.pop()!, fresh: true });
+      b.event = name + ' bought a development card.';
+    } else if (c.move === 'playDev') {
+      const kind = c.card as DevCard,
+        held = b.dev?.[id] ?? [];
+      if (!devCards.includes(kind) || !playable(b, id, held, kind))
+        return reject('You cannot play that card now.');
+      if (kind === 'bounty') {
+        if (!Array.isArray(c.cards) || c.cards.length !== 2 || !c.cards.every(isResource))
+          return reject('Choose two resources.');
+        for (const r of c.cards as Resource[]) hand[r]++;
+        b.event = name + ' took two resources from the bank.';
+      } else if (kind === 'monopoly') {
+        if (!isResource(c.resource)) return reject('Choose a resource.');
+        let taken = 0;
+        for (const other of b.order) {
+          if (other === id) continue;
+          taken += b.hands[other][c.resource];
+          b.hands[other][c.resource] = 0;
+        }
+        hand[c.resource] += taken;
+        b.event = name + ' played a monopoly and took ' + taken + (taken === 1 ? ' card.' : ' cards.');
+      } else if (kind === 'roads') {
+        b.freeRoads = 2;
+        b.event = name + ' builds two free roads.';
+      } else {
+        const knights = (b.knights ??= {});
+        knights[id] = (knights[id] ?? 0) + 1;
+        b.resume = b.phase === 'roll' ? 'roll' : 'build';
+        b.phase = 'robber';
+        b.event = name + ' played a knight.';
+        const best = b.strongestArmy ? (knights[b.strongestArmy] ?? 0) : 2;
+        if (b.strongestArmy !== id && knights[id] > best) {
+          b.strongestArmy = id;
+          b.event += ' They have the strongest army!';
+        }
+      }
+      held.splice(
+        held.findIndex((h) => h.kind === kind && !h.fresh),
+        1,
+      );
+      b.devPlayed = true;
     } else if (c.move === 'roll' && b.phase === 'roll') {
       b.dice = Array.from({ length: 2 }, () => Math.floor(Math.random() * 6) + 1);
       const sum = b.dice[0] + b.dice[1],
@@ -158,7 +229,8 @@ export function islandMove(b: Island, id: string, name: string, c: Record<string
             .filter((pid) => pid && pid !== id && resources.some((k) => b.hands[pid][k] > 0)),
         ),
       ];
-      b.phase = b.victims.length ? 'steal' : 'build';
+      b.phase = b.victims.length ? 'steal' : (b.resume ?? 'build');
+      if (!b.victims.length) delete b.resume;
       b.event = name + ' moved the robber.';
     } else if (c.move === 'steal' && b.phase === 'steal') {
       const target = String(c.target);
@@ -174,7 +246,8 @@ export function islandMove(b: Island, id: string, name: string, c: Record<string
         }
       }
       b.victims = [];
-      b.phase = 'build';
+      b.phase = b.resume ?? 'build';
+      delete b.resume;
       b.event = name + ' stole a resource.';
     } else if (c.move === 'harvest' && b.phase === 'harvest' && isResource(c.resource)) {
       hand[c.resource]++;
@@ -202,6 +275,8 @@ export function islandMove(b: Island, id: string, name: string, c: Record<string
       b.event = name + ' withdrew the trade.';
     } else if (c.move === 'end' && b.phase === 'build') {
       b.turn = (b.turn + 1) % b.order.length;
+      b.devPlayed = false;
+      for (const held of b.dev?.[id] ?? []) held.fresh = false;
       b.phase = 'roll';
       b.event = name + ' ended their turn.';
     } else return reject('That action is unavailable in this phase.');

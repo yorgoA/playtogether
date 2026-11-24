@@ -6,10 +6,13 @@ import { z } from 'zod';
 
 export const gameIds = ['quiz', 'reaction', 'turbo', 'settlers'] as const;
 export const resources = ['timber', 'clay', 'grain', 'wool', 'ore'] as const;
+export const devCards = ['knight', 'roads', 'bounty', 'monopoly', 'victory'] as const;
 export const pieces = ['road', 'settlement', 'city'] as const;
 const Game = z.enum(gameIds);
 const Resource = z.enum(resources);
 const Piece = z.enum(pieces);
+const DevCard = z.enum(devCards);
+const HeldCard = z.object({ kind: DevCard, fresh: z.boolean() }).strict();
 const Phase = z.enum(['lobby', 'playing', 'paused', 'results', 'ended']);
 const IslandPhase = z.enum(['order', 'settlement', 'road', 'roll', 'harvest', 'discard', 'robber', 'steal', 'build']);
 // All five resources are always present, as zero when the player has none.
@@ -51,6 +54,7 @@ const playerCommands = [
     move: z.string().max(20),
     revision: z.number().int(),
     piece: Piece.optional(),
+    card: DevCard.optional(),
     index: z.number().int().optional(),
     cards: z.array(Resource).max(40).optional(),
     target: z.string().max(60).optional(),
@@ -146,6 +150,16 @@ const Island = z
     offer: z.object({ give: Resource, want: Resource }).strict().nullable(),
     hand: Hand.optional(),
     handSizes: z.record(z.string(), z.number()),
+    // Development cards: only the viewer's own are listed. The deck itself is never sent.
+    devHand: z.array(HeldCard).optional(),
+    devSizes: z.record(z.string(), z.number()),
+    deckLeft: z.number(),
+    devPlayed: z.boolean().optional(),
+    freeRoads: z.number().optional(),
+    resume: z.enum(['roll', 'build']).optional(),
+    knights: z.record(z.string(), z.number()).optional(),
+    longestRoad: z.string().optional(),
+    strongestArmy: z.string().optional(),
   })
   .strict();
 

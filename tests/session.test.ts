@@ -54,6 +54,19 @@ describe('permissions and privacy', () => {
     for (const token of ['', island.seats[0].token])
       expect(snapshot(island.room, T0, token).island!.handSizes).toEqual({ [me.id]: 2, [other.id]: 3 });
     expect(snapshot(island.room, T0).island!.hand).toBeUndefined();
+    island.room.island!.dev = {
+      [me.id]: [{ kind: 'knight', fresh: true }],
+      [other.id]: [{ kind: 'victory', fresh: false }],
+    };
+    const mine = snapshot(island.room, T0, island.seats[0].token).island!;
+    expect(mine.devHand).toEqual([{ kind: 'knight', fresh: true }]);
+    expect(mine.devSizes).toEqual({ [me.id]: 1, [other.id]: 1 });
+    for (const seen of [mine, snapshot(island.room, T0).island!]) {
+      expect(seen).not.toHaveProperty('deck');
+      expect(seen).not.toHaveProperty('dev');
+      expect(seen.deckLeft).toBe(25);
+      expect(JSON.stringify(seen)).not.toContain('victory');
+    }
     const json = JSON.stringify(view);
     for (const secret of [island.room.hostToken, ...island.seats.map((s) => s.token)])
       expect(json).not.toContain(secret);

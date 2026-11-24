@@ -1,4 +1,4 @@
-import type {Piece,Resource} from '@/lib/island/board';
+import type {DevCard,Piece,Resource} from '@/lib/island/board';
 // Drawn on a 24x24 grid so the same artwork works in React, SVG maps and canvas textures.
 type Shape=[path:string,color:string];
 export const resourceArt:Record<Resource,Shape[]>={
@@ -24,4 +24,24 @@ export function drawResource(ctx:CanvasRenderingContext2D,resource:Resource,x:nu
  ctx.save();ctx.translate(x-size/2,y-size/2);ctx.scale(size/24,size/24);
  for(const [d,c] of resourceArt[resource]){ctx.fillStyle=c;ctx.fill(new Path2D(d))}
  ctx.restore();
+}
+// One drawing per development card, plus the two awards.
+const devArt:Record<DevCard|'trail',string>={
+ knight:'M12 2l8 3v6c0 5-3.5 9-8 11c-4.5-2-8-6-8-11V5z',
+ roads:'M2 10L14 3l2 3L4 13zM8 19L20 12l2 3L10 22z',
+ bounty:'M12 8c-2-6-9-5-7-1c1 1 4 1 7 1c3 0 6 0 7-1c2-4-5-5-7 1zM3 9h18v4H3zM4 14h16v8H4z',
+ monopoly:'M3 8l4.5 4L12 4l4.5 8L21 8l-2 10H5zM5 19.5h14V22H5z',
+ victory:'M12 2l3 6.5l7 .8l-5.2 4.7l1.5 7L12 17.5L5.7 21l1.5-7L2 9.3l7-.8z',
+ trail:'M4 20c0-6 12-4 12-9S8 9 8 4',
+};
+export const devLabel:Record<DevCard,string>={knight:'Knight',roads:'Road building',bounty:'Bounty',monopoly:'Monopoly',victory:'Victory point'};
+export const devText:Record<DevCard,string>={
+ knight:'Move the robber and steal a card from a neighbour. Three knights can earn the strongest army.',
+ roads:'Place two roads for free.',
+ bounty:'Take any two resources from the bank.',
+ monopoly:'Name a resource and take every card of it from all players.',
+ victory:'Worth 1 point. It counts on its own and stays secret until you win.',
+};
+export function DevIcon({kind,className}:{kind:DevCard|'trail',className?:string}){
+ return <svg className={className} viewBox="0 0 24 24" aria-hidden="true"><path d={devArt[kind]} fill={kind==='trail'?'none':'currentColor'} stroke={kind==='trail'?'currentColor':'none'} strokeWidth="4" strokeLinecap="round" strokeDasharray={kind==='trail'?'5 5':undefined}/></svg>;
 }
