@@ -1,16 +1,8 @@
-import {
-  advanceRace,
-  boostPads,
-  createRace,
-  drive,
-  hazards,
-  publicRace,
-  raceCountdown,
-  raceScores,
-  resumeRace,
-} from './racing';
-import { GameError, games, type Game, type RoundData } from './games';
-
+import { advanceDuel, bangWhenAllShot, duelView, leaveDuel, rearm, startDuel, type Duel } from './duel';
+import { roundChoices } from '../quiz/rounds';
+import { GameError, games, type Game } from './games';
+import { advanceQuiz, answerQuiz, choosePower, hurryQuiz, quizView, startQuiz, type Quiz } from './quiz';
+import type { Question } from './trivia';
 import { gameIds, type RoomSnapshot } from '../contract';
 import { claimPyramid, flipPyramid, newPyramid, pyramidView, resolvePyramid, type Pyramid } from './pyramid';
 import {
@@ -54,13 +46,15 @@ export type Room = {
   players: Player[];
   rounds: number;
   round: number;
-  deck: RoundData[];
+  quiz?: Quiz;
+  duel?: Duel;
+  // Quiz questions this room has had, so a rematch brings new ones.
+  asked?: string[];
   botAt?: number;
   island?: Island;
   pyramid?: Pyramid;
   kings?: Kings;
   revealing?: boolean;
-  race?: ReturnType<typeof createRace>;
   started: number;
   deadline: number;
   signalAt: number;
@@ -68,51 +62,41 @@ export type Room = {
 };
 type Command = Record<string, unknown>;
 const connected = (p: Player, now: number) => !!p.bot || now - p.lastSeen < 25000;
-const revealMs = 3500;
 // Phones learn the signal before it fires, so every screen can show it together. Long enough for a slow
 // phone to lose a message and ask again, and shorter than the shortest wait (2 s).
 const signalLeadMs = 1800;
 // Nobody reacts faster than this, so a quicker tap was a guess.
 const fastestReactionMs = 80;
-// Most of a late tap's delay we accept as network time.
-const networkAllowanceMs = 1500;
+// Most of a late tap's delay we accept as network time: enough to lose a message twice on a slow phone.
+const networkAllowanceMs = 3000;
 function gameId(value: unknown): Game {
   const game = gameIds.find((id) => id === value);
   if (game) return game;
   throw new GameError('Choose an available game.');
 }
-function roundCount(value: unknown) {
-  if (typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 10) return value;
-  throw new GameError('Choose between 1 and 10 rounds.');
+function roundCount(game: Game, value: unknown) {
+  const choices = roundChoices[game];
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 10)
+    if (!choices || choices.includes(value)) return value;
+  throw new GameError(
+    choices ? 'Choose ' + choices.join(', ') + ' rounds.' : 'Choose between 1 and 10 rounds.',
+  );
 }
 export function newRoom(code: string, body: Command): Room {
+  const game = gameId(body.game ?? 'quiz');
   return {
     code,
     hostToken: crypto.randomUUID(),
-    game: gameId(body.game ?? 'quiz'),
+    game,
     phase: 'lobby',
     players: [],
-    rounds: roundCount(body.rounds ?? 5),
+    rounds: roundCount(game, body.rounds ?? roundChoices[game]?.[0] ?? 1),
     round: 0,
-    deck: [],
     started: 0,
     deadline: 0,
     signalAt: 0,
     pausedAt: 0,
   };
-}
-function beginRound(r: Room, now: number) {
-  r.round++;
-  r.revealing = false;
-  r.started = r.game === 'turbo' ? now + raceCountdown : now;
-  r.deadline = r.started + games[r.game].duration;
-  r.signalAt = r.game === 'reaction' ? now + games[r.game].signalDelay() : 0;
-  r.players.forEach((p) => {
-    p.answered = false;
-    p.reactionMs = undefined;
-    p.early = undefined;
-    p.gained = 0;
-  });
 }
 function playIsland(r: Room, p: Player, command: Command, now: number) {
   const board = r.island!;
@@ -147,28 +131,18 @@ function advance(r: Room, now: number) {
     drink(r, poured);
     return !!poured;
   }
-  if (r.phase !== 'playing' || r.game === 'settlers' || r.game === 'pyramid' || r.game === 'kings')
-    return false;
-  if (r.game === 'turbo' && r.race) {
-    advanceRace(r.race, Math.min(now, r.deadline));
-    const scores = raceScores(r.race, r.started);
-    for (const player of r.players) player.score = scores[player.id] || 0;
-    if (now < r.deadline && r.race.cars.some((c) => c.finishedAt === null)) return false;
+  if (r.phase !== 'playing') return false;
+  const moved = r.quiz
+    ? advanceQuiz(r, (p) => connected(p as Player, now), now)
+    : r.duel
+      ? advanceDuel(r, now)
+      : false;
+  if (moved === 'over') {
     r.phase = 'results';
     r.deadline = 0;
     return true;
   }
-  if (now < r.deadline) return false;
-  if (!r.revealing) {
-    r.revealing = true;
-    r.deadline = now + revealMs;
-    return true;
-  }
-  if (r.round >= r.rounds) {
-    r.phase = 'results';
-    r.deadline = 0;
-  } else beginRound(r, now);
-  return true;
+  return moved;
 }
 function lobby(r: Room) {
   r.revealing = false;
@@ -176,8 +150,8 @@ function lobby(r: Room) {
   r.round = 0;
   r.deadline = 0;
   r.signalAt = 0;
-  r.deck = [];
-  delete r.race;
+  delete r.quiz;
+  delete r.duel;
   delete r.island;
   delete r.pyramid;
   delete r.kings;
@@ -194,11 +168,6 @@ function clearStandIns(r: Room) {
     p.standIn = undefined;
   });
 }
-function revealWhenAllAnswered(r: Room, now: number) {
-  if (!r.players.every((p) => p.answered)) return;
-  r.revealing = true;
-  r.deadline = now + revealMs;
-}
 function reactionTime(command: Command, now: number, signal: number): number | null {
   const elapsed = now - signal;
   if (command.early === true || elapsed < 0) return null;
@@ -209,7 +178,6 @@ function reactionTime(command: Command, now: number, signal: number): number | n
 }
 function removePlayer(r: Room, p: Player, now: number) {
   r.players = r.players.filter((other) => p !== other);
-  if (r.race) r.race.cars = r.race.cars.filter((c) => c.id !== p.id);
   if (r.phase !== 'playing' && r.phase !== 'paused') return;
   if (!r.players.length) {
     lobby(r);
@@ -227,16 +195,16 @@ function removePlayer(r: Room, p: Player, now: number) {
     return;
   }
   // While paused, the deadline moves forward on resume.
-  if (r.race || r.revealing) return;
-  revealWhenAllAnswered(r, r.phase === 'paused' ? r.pausedAt : now);
+  const at = r.phase === 'paused' ? r.pausedAt : now;
+  if (r.duel) {
+    leaveDuel(r, p.id, at);
+    if (r.players.length < 2) r.phase = 'results';
+  } else if (r.quiz) hurryQuiz(r, (other) => connected(other as Player, at), at);
 }
-function start(r: Room, now: number) {
-  if (r.game === 'settlers' && r.players.length < 2)
-    throw new GameError('Island Settlers needs two to four players.');
-  if (r.game === 'pyramid' && r.players.length < 2)
-    throw new GameError('Pyramid needs two to eight players.');
-  if (r.game === 'kings' && r.players.length < 2)
-    throw new GameError('Kings Cup needs two to eight players.');
+function start(r: Room, now: number, questions: Question[]) {
+  const { name, minPlayers, maxPlayers } = games[r.game];
+  if (r.players.length < minPlayers)
+    throw new GameError(name + ' needs two to ' + (maxPlayers === 4 ? 'four' : 'eight') + ' players.');
   if (!r.players.some((p) => !p.bot && !p.standIn)) throw new GameError('Join with a phone before starting.');
   if (r.players.some((p) => !p.ready || !(p.standIn || connected(p, now))))
     throw new GameError('Every player must be connected and ready.');
@@ -250,8 +218,8 @@ function start(r: Room, now: number) {
     r.kings = newKings(r.players.map((p) => p.id));
     return;
   }
-  r.deck = games[r.game].prepare(r.rounds);
-  beginRound(r, now);
+  if (r.game === 'quiz') startQuiz(r, questions, now);
+  if (r.game === 'reaction') startDuel(r, now);
   if (r.game === 'settlers') {
     const used = new Set<string>();
     for (const p of r.players) {
@@ -262,18 +230,14 @@ function start(r: Room, now: number) {
     r.botAt = now + 1150;
     r.island = startIsland(r.players.map((p) => p.id));
   }
-  if (r.game === 'turbo')
-    r.race = createRace(
-      r.players.map((p) => p.id),
-      r.started,
-    );
 }
 function textField(value: unknown, max: number, label: string): string {
   if (typeof value !== 'string' || !value.trim() || value.trim().length > max)
     throw new GameError('Choose a valid ' + label + '.');
   return value.trim();
 }
-export function mutate(r: Room, command: Command, token: string, now: number) {
+// `questions` are what a quiz starting now can ask.
+export function mutate(r: Room, command: Command, token: string, now: number, questions: Question[] = []) {
   const { action } = command;
   let dirty = advance(r, now);
   const extras: Record<string, string> = {};
@@ -338,27 +302,6 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
     if (r.phase !== 'lobby' || typeof command.ready !== 'boolean')
       throw new GameError('Ready status can be set in the lobby.');
     player.ready = command.ready;
-  } else if (action === 'drive' && player) {
-    if (r.phase === 'results' && r.game === 'turbo') return { dirty, extras };
-    if (r.phase !== 'playing' || r.game !== 'turbo' || !r.race)
-      throw new GameError('The race is not active.', 409);
-    const { steering, accelerate, brake, powerUp } = command;
-    if (
-      typeof steering !== 'number' ||
-      !Number.isFinite(steering) ||
-      Math.abs(steering) > 1 ||
-      typeof accelerate !== 'number' ||
-      !Number.isFinite(accelerate) ||
-      accelerate < 0 ||
-      accelerate > 1 ||
-      typeof brake !== 'number' ||
-      !Number.isFinite(brake) ||
-      brake < 0 ||
-      brake > 1 ||
-      typeof powerUp !== 'boolean'
-    )
-      throw new GameError('Invalid driving input.');
-    drive(r.race, player.id, { steering, accelerate, brake, powerUp, drift: command.drift === true }, now);
   } else if (action === 'island' && player) {
     if (!r.island || r.phase !== 'playing')
       throw new GameError(r.phase === 'paused' ? 'The game is paused.' : 'The match is not active.', 409);
@@ -393,26 +336,24 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
     if (r.game === 'settlers') throw new GameError('Use the island controls.');
     if (r.game === 'pyramid') throw new GameError('Use the Pyramid controls.');
     if (r.game === 'kings') throw new GameError('Use the Kings Cup controls.');
-    if (r.game === 'turbo') throw new GameError('Use your driving controls.');
-    if (r.phase !== 'playing' || r.revealing || command.round !== r.round)
-      throw new GameError('This round is closed.', 409);
-    if (player.answered) return { dirty, extras };
-    let points = 0;
-    if (r.game === 'reaction') {
+    if (r.phase !== 'playing' || command.round !== r.round) throw new GameError('This round is closed.', 409);
+    if (r.quiz) {
+      answerQuiz(r, player, command, now);
+      hurryQuiz(r, (p) => connected(p as Player, now), now);
+    } else if (r.duel) {
+      if (r.revealing || command.draw !== r.duel.draw) throw new GameError('This draw is over.', 409);
+      if (!r.duel.alive.includes(player.id)) throw new GameError('You are out of this round.', 409);
+      if (player.answered) return { dirty, extras };
       const ms = reactionTime(command, now, r.signalAt);
       if (ms === null) player.early = true;
-      else {
-        player.reactionMs = ms;
-        points = games.reaction.score(r.deck[r.round - 1], ms, now, r.started);
-      }
-    } else {
-      if (typeof command.value !== 'number') throw new GameError('Invalid input.');
-      points = games[r.game].score(r.deck[r.round - 1], command.value, now, r.started);
+      else player.reactionMs = ms;
+      player.answered = true;
+      bangWhenAllShot(r, now);
     }
-    player.gained = points;
-    player.score += points;
-    player.answered = true;
-    revealWhenAllAnswered(r, now);
+  } else if (action === 'quizPower' && player) {
+    if (!r.quiz || r.phase !== 'playing') throw new GameError('The quiz is not active.', 409);
+    choosePower(r, player.id, command);
+    hurryQuiz(r, (p) => connected(p as Player, now), now);
   } else if (host) {
     switch (action) {
       case 'addBot': {
@@ -450,13 +391,15 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
             r.players.forEach((p) => (p.ready = false));
           }
           r.game = game;
+          const choices = roundChoices[game];
+          if (choices && !choices.includes(r.rounds)) r.rounds = choices[0];
         }
-        if (command.rounds !== undefined) r.rounds = roundCount(command.rounds);
+        if (command.rounds !== undefined) r.rounds = roundCount(r.game, command.rounds);
         break;
       case 'start':
         if (r.phase !== 'lobby' && r.phase !== 'results')
           throw new GameError('A match is already in progress.');
-        start(r, now);
+        start(r, now, questions);
         break;
       case 'pyramidFlip':
         if (!r.pyramid || r.phase !== 'playing') throw new GameError('Pyramid is not active.', 409);
@@ -469,7 +412,7 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
         if (kingsOver(r.kings)) r.phase = 'results';
         break;
       case 'restart':
-        start(r, now);
+        start(r, now, questions);
         break;
       case 'pause':
         if (r.phase !== 'playing') throw new GameError('No active match to pause.');
@@ -482,13 +425,10 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
         r.started += delta;
         r.deadline += delta;
         if (r.signalAt) r.signalAt += delta;
+        if (r.quiz)
+          for (const pick of Object.values(r.quiz.picks)) if (r.quiz.stage === 'question') pick.at += delta;
         // A fresh signal keeps resuming from giving away the moment.
-        if (r.game === 'reaction' && !r.revealing) {
-          r.started = now;
-          r.deadline = now + games.reaction.duration;
-          r.signalAt = now + games.reaction.signalDelay();
-        }
-        if (r.race) resumeRace(r.race, delta);
+        if (r.duel) rearm(r, now);
         if (r.kings) resumeKings(r.kings, delta);
         r.phase = 'playing';
         break;
@@ -544,11 +484,18 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
     : undefined;
   const clock = r.phase === 'paused' ? r.pausedAt : now;
   const signalAt = r.signalAt && clock >= r.signalAt - signalLeadMs ? r.signalAt : null;
-  const q = r.round && ['playing', 'paused'].includes(r.phase) ? r.deck[r.round - 1] : null;
+  const quiz =
+    r.quiz && (r.phase === 'playing' || r.phase === 'paused')
+      ? quizView(r, viewer?.id, !!token && token === r.hostToken, clock)
+      : undefined;
+  // Who shot when stays secret until the smoke clears.
+  const shotsShown = !r.duel || !!r.revealing;
   return {
     island,
     pyramid: r.pyramid ? pyramidView(r.pyramid, viewer?.id) : undefined,
     kings: r.kings ? kingsView(r.kings) : undefined,
+    quiz: quiz?.view,
+    duel: r.duel ? duelView(r.duel) : undefined,
     code: r.code,
     game: r.game,
     phase: r.phase,
@@ -559,21 +506,17 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
     serverTime: now,
     pausedAt: r.pausedAt,
     revealing: Boolean(r.revealing),
-    correct: r.revealing && q && r.game === 'quiz' ? q.correct : null,
-    startsAt: r.race ? r.started : null,
-    racers: r.race ? publicRace(r.race, r.started) : [],
-    pads: r.game === 'turbo' ? boostPads : [],
-    hazards: r.game === 'turbo' ? hazards : [],
-    question: q ? { text: q.text, options: q.options } : null,
+    correct: quiz?.correct ?? null,
+    question: quiz?.question ?? null,
     players: r.players.map((p) => ({
       bot: p.bot,
       standIn: p.standIn,
-      early: p.early,
+      early: shotsShown || p === viewer ? p.early : undefined,
       id: p.id,
       name: p.name,
       avatar: p.avatar,
       color: p.color,
-      reactionMs: p.reactionMs,
+      reactionMs: shotsShown || p === viewer ? p.reactionMs : undefined,
       gained: p.gained,
       ready: p.ready,
       connected: connected(p, now),

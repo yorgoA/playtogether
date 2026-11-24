@@ -1,30 +1,15 @@
 "use client";
 import {useCallback,useEffect,useRef,useState} from 'react';
-import type { KingsView, PyramidView, RoomSnapshot } from '../contract';
+import type { DuelView, KingsView, QuizView, PyramidView, RoomSnapshot } from '../contract';
 export type GameId = RoomSnapshot['game'];
-export const games={pyramid:{title:'Pyramid',instructions:'Memorize four cards, then make others drink with a match, or bluff. Called bluffs cost double. Any drink counts, water too.',max:8},kings:{title:'Kings Cup',instructions:'Take turns pulling a card and do what it says. The fourth king drinks the cup. Any drink counts, water too.',max:8},settlers:{title:'Island Settlers',instructions:'Place two settlements and roads, then roll, build and trade. Earn development cards, the longest road and the strongest army. First to ten points wins.',max:4},quiz:{title:'Quiz Volt',instructions:'Read the question on the TV and tap your answer before time runs out.',max:12},reaction:{title:'Reaction Duel',instructions:'Wait for GO on the TV. Tap your phone or give it a small shake as fast as you can.',max:8},turbo:{title:'Turbo Racers',instructions:'Race three laps. Steer around hazards, cross cyan boost pads, and hold Drift while steering. Release when charged for a boost.',max:4}};
+export const games={pyramid:{title:'Pyramid',instructions:'Memorize four cards, then make others drink with a match, or bluff. Called bluffs cost double. Any drink counts, water too.',max:8},kings:{title:'Kings Cup',instructions:'Take turns pulling a card and do what it says. The fourth king drinks the cup. Any drink counts, water too.',max:8},settlers:{title:'Island Settlers',instructions:'Place two settlements and roads, then roll, build and trade. Earn development cards, the longest road and the strongest army. First to ten points wins.',max:4},quiz:{title:'Quiz Volt',instructions:'Every round brings a new theme and new rules. Pick a power, answer on your phone, and watch the TV for the answer.',max:12},reaction:{title:'Reaction Duel',instructions:'A standoff. Wait for the signal, then tap or shake your phone. The slowest falls, until one is left standing.',max:8}};
 // Drinks are stored as negative scores, so the lightest drinker ranks first.
 export const drinking=(game:GameId)=>game==='pyramid'||game==='kings';
 export const scoreText=(game:GameId,score:number)=>drinking(game)?Math.abs(score)+(score===-1?' sip':' sips'):score+' pts';
-// What a player achieved: a finish time in races, points or sips elsewhere.
-export function resultText(room:Room,p:Player) {
- if(room.game!=='turbo')return scoreText(room.game,p.score);
- const car=room.racers.find(r=>r.id===p.id);if(!car)return '';
- if(car.timeMs===null)return room.phase==='results'?'Did not finish · '+Math.floor(car.progress*100/3)+'%':'';
- const tenths=Math.round(car.timeMs/100),min=Math.floor(tenths/600);
- return min+':'+String(Math.floor(tenths/10)%60).padStart(2,'0')+'.'+tenths%10;
-}
-// The race countdown: what to show now, or null once it is over.
-export function countdown(startsAt:number|null,now:number) {
- if(startsAt===null||now>startsAt+900)return null;
- if(now>=startsAt)return 'GO!';
- const left=Math.ceil((startsAt-now)/1000);return left>3?'Get ready':String(left);
-}
 export const avatars=['🦊','🐼','🐸','🐙','🐯','🐨','🐧','🐱'];
 export const colors=['#c3f76a','#bc96ff','#ffae65','#ff83b1','#69dafa','#ffdf75'];
 export type Player={bot?:boolean,standIn?:boolean,early?:boolean,reactionMs?:number,gained?:number,id:string,name:string,color:string,avatar:string,score:number,ready:boolean,connected:boolean,answered:boolean};
-export type Racer={impactUntil?:number,driftCharge?:number,driftDirection?:number,id:string,progress:number,lane:number,speed:number,boostReadyAt:number,boostUntil:number,finishedAt:number|null,timeMs:number|null};
-export type Room={startsAt:number|null,pyramid?:PyramidView,kings?:KingsView,island?:import('../island/board').BoardView,revealing?:boolean,correct?:number|null,hazards:{at:number,lane:number}[],pads?:{at:number,lane:number}[],racers:Racer[],code:string,game:GameId,round:number,rounds:number,phase:'lobby'|'playing'|'paused'|'results'|'ended',question:{text:string,options:string[]}|null,deadline:number,signalAt:number|null,serverTime:number,players:Player[]};
+export type Room={quiz?:QuizView,duel?:DuelView,pausedAt:number,pyramid?:PyramidView,kings?:KingsView,island?:import('../island/board').BoardView,revealing?:boolean,correct?:number|null,code:string,game:GameId,round:number,rounds:number,phase:'lobby'|'playing'|'paused'|'results'|'ended',question:{text:string,options:string[]}|null,deadline:number,signalAt:number|null,serverTime:number,players:Player[]};
 export type Seat={code:string,token:string,game?:string,id?:string};
 export const hostKey='playtogether.host';
 export const phoneKey='playtogether.phone';
@@ -75,7 +60,7 @@ export function useRoom(seat:Seat|null,onExpired:()=>void) {
  useEffect(()=>{
   setRoom(null);setError('');setOffline(false);rtt.current=Infinity;if(!seat)return;
   let active=true,timeout:ReturnType<typeof setTimeout>,wait=650;
-  const poll=async()=>{const sentAt=Date.now();try{const {room:r}=await api('/'+seat.code,undefined,seat.token);if(!active)return;accept(r,sentAt);wait=r.phase==='playing'&&(r.game==='turbo'||r.game==='reaction')?250:650;setOffline(false);setError(was=>was===lost?'':was)}
+  const poll=async()=>{const sentAt=Date.now();try{const {room:r}=await api('/'+seat.code,undefined,seat.token);if(!active)return;accept(r,sentAt);wait=r.phase!=='playing'?650:r.game==='reaction'?250:r.game==='quiz'?400:650;setOffline(false);setError(was=>was===lost?'':was)}
    catch(e){if(!active)return;if(e instanceof RoomError&&[401,403,404,410].includes(e.status)){expire.current();return}setOffline(true)}
    if(active)timeout=setTimeout(poll,wait);
   };poll();const clock=setInterval(()=>setNow(Date.now()),100);
@@ -118,8 +103,8 @@ export function useRaceTap(seq:number|null,command:(body:Record<string,unknown>)
 export function useTap(room:Room|null,id:string|undefined,command:(body:Record<string,unknown>)=>Promise<boolean>) {
  const [tap,setTap]=useState<{key:string,body:Record<string,unknown>}|null>(null);
  // A pause, restart or new round moves the deadline, which drops an unsent tap.
- const open=room?.game==='reaction'&&room.phase==='playing'&&!room.revealing&&!room.players.find(p=>p.id===id)?.answered;
- const key=open?room.round+':'+room.deadline:null,body=tap&&tap.key===key?tap.body:null;
+ const open=room?.game==='reaction'&&room.phase==='playing'&&!room.revealing&&!!id&&!!room.duel?.alive.includes(id)&&!room.players.find(p=>p.id===id)?.answered;
+ const key=open?room.duel?.draw+':'+room.deadline:null,body=tap&&tap.key===key?tap.body:null;
  const held=useRef<string|null>(null);
  useEffect(()=>{
   if(!body)return;
@@ -129,6 +114,6 @@ export function useTap(room:Room|null,id:string|undefined,command:(body:Record<s
  },[body,command]);
  return {sending:!!body,hold(next:Record<string,unknown>){
   if(!room||!key||held.current===key)return;
-  held.current=key;setTap({key,body:{action:'input',round:room.round,...next}});
+  held.current=key;setTap({key,body:{action:'input',round:room.round,draw:room.duel?.draw,...next}});
  }};
 }

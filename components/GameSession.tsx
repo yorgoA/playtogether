@@ -1,12 +1,13 @@
 "use client";
 import {useEffect,useState} from 'react';
-import {api,drinking,resultText,games,hostKey,RoomError,saved,useRoom,useSignal,type GameId,type Room,type Seat} from '@/lib/controller/room';
+import {api,drinking,scoreText,games,hostKey,RoomError,saved,useRoom,useSignal,type GameId,type Room,type Seat} from '@/lib/controller/room';
 import RoomQR from './RoomQR';
 import {IslandTV} from './IslandGame';
 import {PyramidTV} from './PyramidGame';
 import {KingsTV} from './KingsGame';
-import KartStage from './KartStage';
-import ArcadeStage from './ArcadeStage';
+import {QuizTV} from './QuizGame';
+import {DuelTV} from './DuelGame';
+import {roundChoices} from '@/lib/quiz/rounds';
 import './session.css';
 // Where phones can reach this server. Empty on localhost without a LAN address.
 function phoneOrigin(){
@@ -30,7 +31,7 @@ async function openHost(game:GameId){
 }
 export function Ranks({room}:{room:Room}){
  const players=[...room.players].sort((a,b)=>b.score-a.score);
- return <ol className="pt-ranks">{players.map((p,i)=><li key={p.id}><span className="pt-rank-num">{players.findIndex(person=>person.score===p.score)+1}</span><span className="pt-avatar" style={{background:p.color}}>{p.avatar}</span><b>{p.name}</b><span>{resultText(room,p)}</span></li>)}</ol>
+ return <ol className="pt-ranks">{players.map((p,i)=><li key={p.id}><span className="pt-rank-num">{players.findIndex(person=>person.score===p.score)+1}</span><span className="pt-avatar" style={{background:p.color}}>{p.avatar}</span><b>{p.name}</b><span>{scoreText(room.game,p.score)}</span></li>)}</ol>
 }
 export default function GameSession({game,onExit}:{game:string,onExit:()=>void}){
  const selected:GameId=Object.hasOwn(games,game)?game as GameId:'quiz';
@@ -42,14 +43,12 @@ export default function GameSession({game,onExit}:{game:string,onExit:()=>void})
   booting.get(selected)!.then(s=>{if(active)setSeat(s)}).catch(e=>{if(active)setInitError(e.message)});
   return ()=>{active=false};
  },[selected,retry]);
- const canStart=room&&room.players.some(p=>!p.bot)&&room.players.length>=(room.game==='settlers'||drinking(room.game)?2:1)&&room.players.length<=games[room.game].max&&room.players.every(p=>p.ready&&p.connected);
+ const canStart=room&&room.players.some(p=>!p.bot)&&room.players.length>=(room.game==='quiz'?1:2)&&room.players.length<=games[room.game].max&&room.players.every(p=>p.ready&&p.connected);
  const winners=room?.players.filter(p=>p.score===Math.max(...room.players.map(other=>other.score)))??[];
  const origin=phoneOrigin();
  const joinUrl=seat?(origin.url||origin.local)+'/join?code='+encodeURIComponent(seat.code):'';
- const roster=room?.players.map(p=>p.id).join()??'';
  const missing=room?.players.filter(p=>!p.bot&&!p.connected&&!p.standIn)??[];
  const midIsland=room?.game==='settlers'&&!!room.island&&room.phase!=='results';
- const seconds=Math.max(0,Math.ceil(((room?.deadline??0)-now)/1000));
  const back=<button className="pt-secondary" onClick={onExit}>Game library</button>;
  const over=room?.phase==='results';
  return <main className="pt-session"><header className="pt-session-nav"><span className="pt-session-brand"><img width="35" height="35" src="/favicon.svg" alt=""/><span>Play<span style={{color:"var(--pt-lime)"}}>Together</span></span></span>{back}</header>
@@ -60,15 +59,15 @@ export default function GameSession({game,onExit}:{game:string,onExit:()=>void})
  {room.phase==='lobby'?<div className="pt-lobby">
  <section className="pt-pane pt-scan">{origin.url?<><RoomQR url={joinUrl}/><h2>Scan to join</h2><p>Open the camera on your phone, or visit the controller page and enter the code.</p></>:<><h2>Phones can’t reach this address</h2><p className="pt-notice" role="status">This page is open on localhost, which only works on this computer. Run <code>npm run dev:lan</code> so phones on your Wi-Fi can join. You can still test the controller on this computer:</p></>}<a href={joinUrl} target="_blank" rel="noreferrer">{joinUrl.split('?')[0].replace(/^https?:\/\//,'')}</a><strong className="pt-code">{room.code}</strong></section>
  <section className="pt-pane"><h2>Players <span>{room.players.length} / {games[room.game].max}</span></h2>
- {!room.players.length&&<div className="pt-wait"><strong>Waiting for players</strong><p>{room.game==='settlers'?'Join with a phone, then add friends or bots for two to four seats.':drinking(room.game)?'Scan the code with two to eight phones.':'Scan the code with your phone to play solo, or invite more players.'}</p></div>}
+ {!room.players.length&&<div className="pt-wait"><strong>Waiting for players</strong><p>{room.game==='settlers'?'Join with a phone, then add friends or bots for two to four seats.':drinking(room.game)||room.game==='reaction'?'Scan the code with two to eight phones.':'Scan the code with your phone to play solo, or invite more players.'}</p></div>}
  <div className="pt-roster">{room.players.map(p=><div key={p.id} className="pt-person"><span className="pt-avatar" style={{background:p.color}}>{p.avatar}</span><b>{p.name}</b>{p.bot?<button className="pt-text" disabled={busy} onClick={()=>command({action:'kick',playerId:p.id})}>Remove bot</button>:!p.connected?<button className="pt-text" onClick={()=>command({action:'kick',playerId:p.id})}>Remove disconnected player</button>:<small>{p.ready?'Ready':'Getting ready'}</small>}</div>)}</div>
  {room.game==='settlers'&&<button className="pt-secondary" disabled={busy||room.players.length>=4||room.players.filter(p=>p.bot).length>=3} onClick={()=>command({action:'addBot'})}>Add bot</button>}
- {room.game!=='turbo'&&room.game!=='settlers'&&!drinking(room.game)&&<label className="pt-round-label">Rounds <select value={room.rounds} disabled={busy} onChange={e=>command({action:'configure',rounds:Number(e.target.value)})}>{Array.from({length:10},(_,i)=><option key={i}>{i+1}</option>)}</select></label>}
- <p>{games[room.game].instructions}</p><button className="pt-primary" disabled={!canStart||busy} onClick={()=>command({action:'start'})}>Start game</button></section></div>
+ {roundChoices[room.game]&&<label className="pt-round-label">Rounds <select value={room.rounds} disabled={busy} onChange={e=>command({action:'configure',rounds:Number(e.target.value)})}>{roundChoices[room.game]!.map(n=><option key={n}>{n}</option>)}</select></label>}
+ <p>{games[room.game].instructions}</p>{room.game==='quiz'&&<p className="qz-credit">Questions from the <a className="pt-text" href="https://opentdb.com" target="_blank" rel="noreferrer">Open Trivia Database</a> (CC BY-SA 4.0).</p>}<button className="pt-primary" disabled={!canStart||busy} onClick={()=>command({action:'start'})}>Start game</button></section></div>
  :over?<section className="pt-pane"><h2>{winners.map(p=>p.name).join(' & ')} {drinking(room.game)?'stayed the most sober!':winners.length===1?'wins!':'tie!'}</h2><Ranks room={room}/><div className="pt-actions"><button className="pt-primary" disabled={busy} onClick={()=>command({action:'restart'})}>Rematch</button><button className="pt-secondary" disabled={busy} onClick={async()=>{if(await command({action:'lobby'}))onExit()}}>Choose another game</button></div></section>
  :room.phase==='ended'?<section className="pt-pane"><h2>Session ended</h2>{back}</section>
- :<section className="pt-pane play-floor">{room.game!=='settlers'&&!drinking(room.game)&&<div className="pt-row"><small>{room.game==='turbo'?'3-LAP RACE':'ROUND '+room.round+' / '+room.rounds}</small>{room.phase==='playing'&&<strong>{room.startsAt!==null&&now<room.startsAt?'Get ready':seconds+'s'}</strong>}</div>}
- {room.game==='kings'&&room.kings?<KingsTV room={room} board={room.kings} command={command} busy={busy}/>:room.game==='pyramid'&&room.pyramid?<PyramidTV room={room} board={room.pyramid} command={command} busy={busy}/>:room.game==='settlers'?<IslandTV room={room}/>:room.game === 'turbo' ? <KartStage key={roster} room={room} now={now}/> : <ArcadeStage key={roster} room={room} go={go}/>}
+ :<section className="pt-pane play-floor">{room.game!=='settlers'&&!drinking(room.game)&&<div className="pt-row"><small>ROUND {room.round} / {room.rounds}</small></div>}
+ {room.game==='kings'&&room.kings?<KingsTV room={room} board={room.kings} command={command} busy={busy}/>:room.game==='pyramid'&&room.pyramid?<PyramidTV room={room} board={room.pyramid} command={command} busy={busy}/>:room.game==='settlers'?<IslandTV room={room}/>:room.quiz?<QuizTV room={room} quiz={room.quiz} now={now}/>:room.duel?<DuelTV room={room} duel={room.duel} go={go}/>:null}
  <div className="pt-actions"><button className="pt-secondary" disabled={busy} onClick={()=>command({action:room.phase==='paused'?'resume':'pause'})}>{room.phase==='paused'?'Resume':'Pause'}</button><button className="pt-secondary" disabled={busy} onClick={()=>command({action:'restart'})}>Restart match</button><button className="pt-secondary" disabled={busy} onClick={()=>command({action:'lobby'})}>Return to lobby</button></div></section>}
  {room.phase!=='ended'&&<footer className="pt-room-foot">{confirm?<><span>End this room for everyone?</span><button className="pt-secondary" onClick={()=>setConfirm(false)}>Cancel</button><button className="pt-secondary" onClick={async()=>{if(await command({action:'end'})){localStorage.removeItem(hostKey);onExit()}}}>End room</button></>:<button className="pt-text" onClick={()=>setConfirm(true)}>End session</button>}</footer>}
  </>}</main>

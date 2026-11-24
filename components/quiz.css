@@ -1,0 +1,33 @@
+.qz-tv{display:grid;gap:14px}
+.qz-stage{position:relative;overflow:hidden;container-type:inline-size;min-height:clamp(340px,60vh,820px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(10px,1.4vw,24px);padding:clamp(16px,3vw,56px);border-radius:16px;color:#fff;text-align:center;background:radial-gradient(ellipse at 50% 0,#8b3fd1 0%,#44207a 45%,#1c1140 100%)}
+.qz-stage.qz-suspense{background:radial-gradient(ellipse at 50% 40%,#5a1d4c 0%,#1a0a2a 70%);animation:qz-beat .7s infinite alternate ease-in-out}
+.pt-session .qz-stage h2{margin:0;font-size:clamp(1.5rem,4cqw,4.4rem);line-height:1.12;text-wrap:balance;max-width:95%}
+.qz-center{display:grid;justify-items:center;gap:clamp(10px,1.6vw,26px)}.qz-center small{letter-spacing:.2em;font-weight:800;color:#d9c2ff}
+.qz-theme{display:grid;justify-items:center;padding:clamp(14px,2vw,34px) clamp(30px,5vw,90px);border-radius:28px;background:#ffffff1a;opacity:.75}.qz-theme span{font-size:clamp(3rem,8cqw,8rem);line-height:1.1}.qz-theme.landed{opacity:1;background:#fff;color:#33145e;animation:qz-pop .45s cubic-bezier(.2,.9,.3,1.5)}
+.qz-type{animation:qz-pop .4s}.qz-type b{font-size:clamp(1.3rem,2.8cqw,2.8rem);color:#ffe27a}.pt-session .qz-type p{margin:.2em 0 0;color:#eadcff;font-size:clamp(1rem,1.7cqw,1.6rem)}
+.qz-powerbar{position:relative;overflow:hidden;display:flex;justify-content:space-between;gap:30px;width:min(92%,900px);padding:14px 26px;border-radius:99px;background:#13092c;font-size:clamp(1rem,1.6cqw,1.6rem)}.qz-powerbar i{position:absolute;inset:0 auto 0 0;background:#b24bff88;transition:width .1s linear}.qz-powerbar b,.qz-powerbar span{position:relative}
+.qz-head{display:flex;align-items:center;gap:14px;font-weight:750;font-size:clamp(.95rem,1.5cqw,1.5rem)}.qz-head span{padding:7px 18px;border-radius:99px;background:#13092c99}.qz-head b{display:grid;place-items:center;width:2.4em;height:2.4em;border-radius:50%;background:#fff;color:#33145e;font-size:1.3em}.qz-head b.hot{background:#ff4d67;color:#fff}
+.qz-options{display:grid;grid-template-columns:1fr 1fr;gap:clamp(8px,1vw,18px);width:100%}
+.qz-options>div{position:relative;display:flex;align-items:center;gap:16px;min-height:clamp(56px,7cqw,120px);padding:10px 20px;border-radius:18px;background:#ffffff22;border:3px solid #ffffff3d;font-size:clamp(1rem,2.1cqw,2.2rem);font-weight:750;text-align:left;line-height:1.15;transition:opacity .4s,transform .4s,background .3s}
+.qz-options b{display:grid;place-items:center;flex:none;width:1.8em;height:1.8em;border-radius:10px;background:#b998ff;color:#261638}.qz-options>:nth-child(2) b{background:#6ee1ed}.qz-options>:nth-child(3) b{background:#ffb177}.qz-options>:nth-child(4) b{background:#f58db5}
+.qz-options .blank span{opacity:.5;font-weight:500}.qz-options .out{opacity:.3;transform:scale(.95)}.qz-options .out>span{text-decoration:line-through}.qz-options .right{background:#2f9e4f;border-color:#b9ff9a;animation:qz-pop .5s cubic-bezier(.2,.9,.3,1.6)}
+.qz-options em{display:flex;margin-left:auto}.qz-options .pt-avatar{margin-left:-8px;border:2px solid #fff}
+.pt-session .qz-status{margin:0;color:#ffe27a;font-weight:800;font-size:clamp(1rem,1.8cqw,1.8rem)}
+.qz-plays{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}.qz-plays span{padding:6px 14px;border-radius:99px;background:#13092cb0;font-size:clamp(.8rem,1.2cqw,1.15rem)}.qz-plays .bounced{background:#b8206a}
+.qz-paused{position:absolute;inset:0;display:grid;place-items:center;background:#10121bd9;font-size:3rem;font-weight:900}
+.qz-scores{display:flex;flex-wrap:wrap;gap:10px}.qz-scores>span{display:flex;align-items:center;gap:10px;padding:6px 16px 6px 6px;border-radius:14px;background:#292b35;border:2px solid transparent}.qz-scores .done{border-color:#c3fa72}.qz-scores strong{color:#d1f59e;font-variant-numeric:tabular-nums}.qz-scores em{font-style:normal;font-weight:800;color:#7dffa0}.qz-scores em.loss{color:#ff8296}
+.qz-credit{font-size:.8rem!important}
+/* Phone */
+.qz-phone{display:grid;gap:14px}.pt-phone .qz-phone h2,.pt-phone .qz-phone p{margin:0}.pt-phone .qz-phone h2{margin-top:6px}.qz-phone h2 i{font-style:normal;color:var(--pt-lime);white-space:nowrap}.qz-chip-row{display:flex;flex-wrap:wrap;gap:8px}.qz-chip-row span{padding:5px 12px;border-radius:99px;background:#3a2560;font-weight:700;font-size:.9rem}
+.qz-powers,.qz-targets,.qz-answers{display:grid;gap:10px}.qz-phone .qz-powers button,.qz-phone .qz-targets button,.qz-phone .qz-answers button{font:inherit;color:#fff;border:2px solid #6b4aa8;border-radius:16px;background:#2c1a52;text-align:left;cursor:pointer;touch-action:manipulation}
+.qz-phone .qz-powers button{display:grid;grid-template-columns:auto 1fr;column-gap:14px;align-items:center;padding:10px 14px}.qz-powers span{grid-row:1/3;font-size:2rem}.qz-powers b{font-size:1.1rem}.qz-powers small{color:#d8c8f3}
+.qz-phone .qz-targets button{display:flex;align-items:center;gap:12px;padding:10px 14px;font-weight:700}
+.qz-phone .qz-answers button{display:flex;align-items:center;gap:14px;min-height:64px;padding:10px 14px;font-weight:700;font-size:1.1rem}.qz-answers b{flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:#b998ff;color:#261638}.qz-phone .qz-answers .gone{opacity:.25}.qz-phone .qz-answers .smoke{background:repeating-linear-gradient(45deg,#3b3b49 0 10px,#4b4b5c 10px 20px)}
+.pt-phone .qz-hit{padding:8px 14px;border-radius:12px;background:#b8206a;color:#fff;font-weight:700}
+.qz-wait{text-align:center;padding:50px 0}.qz-verdict{text-align:center;padding:60px 16px;border-radius:24px;animation:qz-pop .4s}.qz-verdict.yes{background:#2f9e4f}.qz-verdict.no{background:#b3263f}.pt-phone .qz-verdict h2{font-size:3rem}.pt-phone .qz-verdict p{color:#fff;font-weight:700}
+@keyframes qz-pop{from{transform:scale(.7);opacity:.3}}@keyframes qz-beat{to{filter:brightness(1.25)}}
+@media(max-width:680px){.qz-tv .qz-options{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.qz-stage,.qz-stage *,.qz-verdict{animation:none!important}}
+/* Games that need the whole TV: the header gives its room to the stage. */
+.pt-session:has(.qz-tv,.du-scene) .pt-game-head,.pt-session:has(.qz-tv,.du-scene) .play-floor>.pt-row{display:none}.pt-session:has(.qz-tv,.du-scene) .pt-session-nav{padding:8px 0;margin-bottom:10px}.pt-session:has(.qz-tv,.du-scene){padding-bottom:12px}.pt-session:has(.qz-tv,.du-scene) .pt-actions{margin-top:12px}.pt-session:has(.qz-tv,.du-scene) .pt-room-foot{margin-top:4px}
+.pt-phone:has(.qz-phone,.du-phone) .pt-game-head{display:none}.qz-phone,.du-phone{margin-top:14px}

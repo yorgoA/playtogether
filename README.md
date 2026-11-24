@@ -30,7 +30,7 @@ Stop the development server with Ctrl+C, then run `npm run dev:lan`. Open the lo
 | --- | --- |
 | Shared screen and phone UI | `components/`, `app/page.tsx`, `app/join/`, and `public/art/` |
 | Room API and persistence | `app/api/rooms/`, `lib/server/`, `db/`, and `drizzle/` |
-| Game logic shared across screens | `lib/island/`, `lib/controller/`, and `lib/arcade/` |
+| Game logic shared across screens | `lib/island/`, `lib/quiz/`, and `lib/controller/` |
 
 Run `npm run check` before opening a pull request. GitHub runs the same checks. See [AGENTS.md](AGENTS.md) for who owns which files and how to work in parallel.
 

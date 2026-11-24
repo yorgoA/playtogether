@@ -6,7 +6,7 @@ Several people and AI agents work here at the same time. These rules keep their 
 
 | Area | Files |
 | --- | --- |
-| Frontend | `app/page.tsx`, `app/layout.tsx`, `app/join/`, `app/globals.css`, `components/`, `public/`, `lib/arcade/`, `lib/controller/`, `lib/catalog.ts` |
+| Frontend | `app/page.tsx`, `app/layout.tsx`, `app/join/`, `app/globals.css`, `components/`, `public/`, `lib/controller/`, `lib/catalog.ts` |
 | Backend | `app/api/`, `lib/server/`, `lib/contract/`, `lib/island/`, `db/`, `drizzle/`, `worker/`, `tests/`, `.github/`, config files in the root |
 
 Change only your own area. When a task needs the other area, such as a new API field, stop and say what you need so its owner can make the change. A small edit that cannot land separately is fine if the pull request description points it out.
