@@ -5,6 +5,7 @@ import {
   drive,
   hazards,
   publicRace,
+  raceCountdown,
   raceScores,
   resumeRace,
 } from './racing';
@@ -103,8 +104,8 @@ export function newRoom(code: string, body: Command): Room {
 function beginRound(r: Room, now: number) {
   r.round++;
   r.revealing = false;
-  r.started = now;
-  r.deadline = now + games[r.game].duration;
+  r.started = r.game === 'turbo' ? now + raceCountdown : now;
+  r.deadline = r.started + games[r.game].duration;
   r.signalAt = r.game === 'reaction' ? now + games[r.game].signalDelay() : 0;
   r.players.forEach((p) => {
     p.answered = false;
@@ -264,7 +265,7 @@ function start(r: Room, now: number) {
   if (r.game === 'turbo')
     r.race = createRace(
       r.players.map((p) => p.id),
-      now,
+      r.started,
     );
 }
 function textField(value: unknown, max: number, label: string): string {
@@ -559,7 +560,8 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
     pausedAt: r.pausedAt,
     revealing: Boolean(r.revealing),
     correct: r.revealing && q && r.game === 'quiz' ? q.correct : null,
-    racers: r.race ? publicRace(r.race) : [],
+    startsAt: r.race ? r.started : null,
+    racers: r.race ? publicRace(r.race, r.started) : [],
     pads: r.game === 'turbo' ? boostPads : [],
     hazards: r.game === 'turbo' ? hazards : [],
     question: q ? { text: q.text, options: q.options } : null,

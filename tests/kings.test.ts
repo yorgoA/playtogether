@@ -149,9 +149,9 @@ describe('Kings Cup', () => {
   });
   it('never sends race times or presses', () => {
     const { room, tap } = race();
-    tap(0, T0 + 500, 431);
+    tap(0, T0 + 500, 431.4375);
     const json = JSON.stringify(snapshot(room, T0, room.hostToken));
-    for (const secret of ['times', 'raceAt', 'raceUntil', 'presses', '431'])
+    for (const secret of ['times', 'raceAt', 'raceUntil', 'presses', '431.4375'])
       expect(json).not.toContain(secret);
   });
   it('counts a repeated catch once, and a new one again', () => {

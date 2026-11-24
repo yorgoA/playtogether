@@ -141,6 +141,8 @@ const Racer = z
     boostReadyAt: z.number(),
     boostUntil: z.number(),
     finishedAt: z.number().nullable(),
+    // How long the race took this car, once it has finished.
+    timeMs: z.number().nullable(),
     impactUntil: z.number(),
     driftCharge: z.number().optional(),
     driftDirection: z.number().optional(),
@@ -250,6 +252,8 @@ export const RoomSnapshot = z
     pausedAt: z.number(),
     revealing: z.boolean(),
     correct: z.number().nullable(),
+    // When the race starts, on the server's clock. Cars do not move before it.
+    startsAt: z.number().nullable(),
     racers: z.array(Racer),
     pads: z.array(Spot),
     hazards: z.array(Spot),

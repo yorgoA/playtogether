@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useState} from 'react';
-import {api,drinking,scoreText,games,hostKey,RoomError,saved,useRoom,useSignal,type GameId,type Room,type Seat} from '@/lib/controller/room';
+import {api,drinking,resultText,games,hostKey,RoomError,saved,useRoom,useSignal,type GameId,type Room,type Seat} from '@/lib/controller/room';
 import RoomQR from './RoomQR';
 import {IslandTV} from './IslandGame';
 import {PyramidTV} from './PyramidGame';
@@ -30,7 +30,7 @@ async function openHost(game:GameId){
 }
 export function Ranks({room}:{room:Room}){
  const players=[...room.players].sort((a,b)=>b.score-a.score);
- return <ol className="pt-ranks">{players.map((p,i)=><li key={p.id}><span className="pt-rank-num">{players.findIndex(person=>person.score===p.score)+1}</span><span className="pt-avatar" style={{background:p.color}}>{p.avatar}</span><b>{p.name}</b><span>{scoreText(room.game,p.score)}</span></li>)}</ol>
+ return <ol className="pt-ranks">{players.map((p,i)=><li key={p.id}><span className="pt-rank-num">{players.findIndex(person=>person.score===p.score)+1}</span><span className="pt-avatar" style={{background:p.color}}>{p.avatar}</span><b>{p.name}</b><span>{resultText(room,p)}</span></li>)}</ol>
 }
 export default function GameSession({game,onExit}:{game:string,onExit:()=>void}){
  const selected:GameId=Object.hasOwn(games,game)?game as GameId:'quiz';
@@ -67,8 +67,8 @@ export default function GameSession({game,onExit}:{game:string,onExit:()=>void})
  <p>{games[room.game].instructions}</p><button className="pt-primary" disabled={!canStart||busy} onClick={()=>command({action:'start'})}>Start game</button></section></div>
  :over?<section className="pt-pane"><h2>{winners.map(p=>p.name).join(' & ')} {drinking(room.game)?'stayed the most sober!':winners.length===1?'wins!':'tie!'}</h2><Ranks room={room}/><div className="pt-actions"><button className="pt-primary" disabled={busy} onClick={()=>command({action:'restart'})}>Rematch</button><button className="pt-secondary" disabled={busy} onClick={async()=>{if(await command({action:'lobby'}))onExit()}}>Choose another game</button></div></section>
  :room.phase==='ended'?<section className="pt-pane"><h2>Session ended</h2>{back}</section>
- :<section className="pt-pane play-floor">{room.game!=='settlers'&&!drinking(room.game)&&<div className="pt-row"><small>{room.game==='turbo'?'3-LAP RACE':'ROUND '+room.round+' / '+room.rounds}</small>{room.phase==='playing'&&<strong>{seconds}s</strong>}</div>}
- {room.game==='kings'&&room.kings?<KingsTV room={room} board={room.kings} command={command} busy={busy}/>:room.game==='pyramid'&&room.pyramid?<PyramidTV room={room} board={room.pyramid} command={command} busy={busy}/>:room.game==='settlers'?<IslandTV room={room}/>:room.game === 'turbo' ? <KartStage key={roster} room={room}/> : <ArcadeStage key={roster} room={room} go={go}/>}
+ :<section className="pt-pane play-floor">{room.game!=='settlers'&&!drinking(room.game)&&<div className="pt-row"><small>{room.game==='turbo'?'3-LAP RACE':'ROUND '+room.round+' / '+room.rounds}</small>{room.phase==='playing'&&<strong>{room.startsAt!==null&&now<room.startsAt?'Get ready':seconds+'s'}</strong>}</div>}
+ {room.game==='kings'&&room.kings?<KingsTV room={room} board={room.kings} command={command} busy={busy}/>:room.game==='pyramid'&&room.pyramid?<PyramidTV room={room} board={room.pyramid} command={command} busy={busy}/>:room.game==='settlers'?<IslandTV room={room}/>:room.game === 'turbo' ? <KartStage key={roster} room={room} now={now}/> : <ArcadeStage key={roster} room={room} go={go}/>}
  <div className="pt-actions"><button className="pt-secondary" disabled={busy} onClick={()=>command({action:room.phase==='paused'?'resume':'pause'})}>{room.phase==='paused'?'Resume':'Pause'}</button><button className="pt-secondary" disabled={busy} onClick={()=>command({action:'restart'})}>Restart match</button><button className="pt-secondary" disabled={busy} onClick={()=>command({action:'lobby'})}>Return to lobby</button></div></section>}
  {room.phase!=='ended'&&<footer className="pt-room-foot">{confirm?<><span>End this room for everyone?</span><button className="pt-secondary" onClick={()=>setConfirm(false)}>Cancel</button><button className="pt-secondary" onClick={async()=>{if(await command({action:'end'})){localStorage.removeItem(hostKey);onExit()}}}>End room</button></>:<button className="pt-text" onClick={()=>setConfirm(true)}>End session</button>}</footer>}
  </>}</main>

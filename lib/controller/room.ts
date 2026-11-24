@@ -6,11 +6,25 @@ export const games={pyramid:{title:'Pyramid',instructions:'Memorize four cards, 
 // Drinks are stored as negative scores, so the lightest drinker ranks first.
 export const drinking=(game:GameId)=>game==='pyramid'||game==='kings';
 export const scoreText=(game:GameId,score:number)=>drinking(game)?Math.abs(score)+(score===-1?' sip':' sips'):score+' pts';
+// What a player achieved: a finish time in races, points or sips elsewhere.
+export function resultText(room:Room,p:Player) {
+ if(room.game!=='turbo')return scoreText(room.game,p.score);
+ const car=room.racers.find(r=>r.id===p.id);if(!car)return '';
+ if(car.timeMs===null)return room.phase==='results'?'Did not finish · '+Math.floor(car.progress*100/3)+'%':'';
+ const tenths=Math.round(car.timeMs/100),min=Math.floor(tenths/600);
+ return min+':'+String(Math.floor(tenths/10)%60).padStart(2,'0')+'.'+tenths%10;
+}
+// The race countdown: what to show now, or null once it is over.
+export function countdown(startsAt:number|null,now:number) {
+ if(startsAt===null||now>startsAt+900)return null;
+ if(now>=startsAt)return 'GO!';
+ const left=Math.ceil((startsAt-now)/1000);return left>3?'Get ready':String(left);
+}
 export const avatars=['🦊','🐼','🐸','🐙','🐯','🐨','🐧','🐱'];
 export const colors=['#c3f76a','#bc96ff','#ffae65','#ff83b1','#69dafa','#ffdf75'];
 export type Player={bot?:boolean,standIn?:boolean,early?:boolean,reactionMs?:number,gained?:number,id:string,name:string,color:string,avatar:string,score:number,ready:boolean,connected:boolean,answered:boolean};
-export type Racer={impactUntil?:number,driftCharge?:number,driftDirection?:number,id:string,progress:number,lane:number,speed:number,boostReadyAt:number,boostUntil:number,finishedAt:number|null};
-export type Room={pyramid?:PyramidView,kings?:KingsView,island?:import('../island/board').BoardView,revealing?:boolean,correct?:number|null,hazards:{at:number,lane:number}[],pads?:{at:number,lane:number}[],racers:Racer[],code:string,game:GameId,round:number,rounds:number,phase:'lobby'|'playing'|'paused'|'results'|'ended',question:{text:string,options:string[]}|null,deadline:number,signalAt:number|null,serverTime:number,players:Player[]};
+export type Racer={impactUntil?:number,driftCharge?:number,driftDirection?:number,id:string,progress:number,lane:number,speed:number,boostReadyAt:number,boostUntil:number,finishedAt:number|null,timeMs:number|null};
+export type Room={startsAt:number|null,pyramid?:PyramidView,kings?:KingsView,island?:import('../island/board').BoardView,revealing?:boolean,correct?:number|null,hazards:{at:number,lane:number}[],pads?:{at:number,lane:number}[],racers:Racer[],code:string,game:GameId,round:number,rounds:number,phase:'lobby'|'playing'|'paused'|'results'|'ended',question:{text:string,options:string[]}|null,deadline:number,signalAt:number|null,serverTime:number,players:Player[]};
 export type Seat={code:string,token:string,game?:string,id?:string};
 export const hostKey='playtogether.host';
 export const phoneKey='playtogether.phone';
