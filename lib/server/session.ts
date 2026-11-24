@@ -12,7 +12,17 @@ import { GameError, games, type Game, type RoundData } from './games';
 
 import { gameIds, type RoomSnapshot } from '../contract';
 import { claimPyramid, flipPyramid, newPyramid, pyramidView, resolvePyramid, type Pyramid } from './pyramid';
-import { kingsMove, kingsOver, kingsView, leaveKings, newKings, nextKings, type Kings } from './kings';
+import {
+  kingsMove,
+  kingsOver,
+  kingsView,
+  leaveKings,
+  newKings,
+  nextKings,
+  resumeKings,
+  settleRace,
+  type Kings,
+} from './kings';
 import { bankLeft, islandMove, startIsland, totalPoints } from './island';
 import { active, goal, handSize, pointsFor, resources, type Island } from '../island/board';
 import { botMove } from './island-bot';
@@ -127,7 +137,15 @@ function advanceBots(r: Room, now: number) {
   }
   return false;
 }
+function drink(r: Room, poured: ReturnType<typeof kingsMove>) {
+  for (const p of r.players) if (poured?.drinkers.includes(p.id)) p.score -= poured.amount;
+}
 function advance(r: Room, now: number) {
+  if (r.phase === 'playing' && r.kings) {
+    const poured = settleRace(r.kings, now);
+    drink(r, poured);
+    return !!poured;
+  }
   if (r.phase !== 'playing' || r.game === 'settlers' || r.game === 'pyramid' || r.game === 'kings')
     return false;
   if (r.game === 'turbo' && r.race) {
@@ -366,8 +384,9 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
       player.id,
       command,
       r.players.filter((p) => connected(p, now)).map((p) => p.id),
+      now,
     );
-    for (const p of r.players) if (poured?.drinkers.includes(p.id)) p.score -= poured.amount;
+    drink(r, poured);
     if (kingsOver(r.kings)) r.phase = 'results';
   } else if (action === 'input' && player) {
     if (r.game === 'settlers') throw new GameError('Use the island controls.');
@@ -469,6 +488,7 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
           r.signalAt = now + games.reaction.signalDelay();
         }
         if (r.race) resumeRace(r.race, delta);
+        if (r.kings) resumeKings(r.kings, delta);
         r.phase = 'playing';
         break;
       }

@@ -1,7 +1,7 @@
 'use client';
 import {lazy,useState} from 'react';
 import type {KingsView} from '@/lib/contract';
-import type {Room,useRoom} from '@/lib/controller/room';
+import {randomId,useRaceTap,type Room,type useRoom} from '@/lib/controller/room';
 import {cupSips,kingsRules} from '@/lib/kings/rules';
 import Stage from './drinks/Stage';
 import {Card,Drink,list,nameOf,People,Seats,seatColor,sips} from './drinks/parts';
@@ -40,16 +40,20 @@ export function KingsPhone({room,board,busy,command,id}:Props&{id:string}){
  const others=room.players.filter(p=>p.id!==id);
  const left=board.left.flatMap((on,i)=>on?[i]:[]);
  const inRace=board.phase==='race'&&board.racers.includes(id);
+ const race=useRaceTap(inRace&&!board.tapped.includes(id)?board.seq:null,command);
+ const slam=()=>{navigator.vibrate?.(40);race.tap()};
+ // Repeats carry the same press, so a lost reply never costs a second sip.
+ async function catchPlayer(target:string){const press=randomId();for(let tries=0;tries<4&&!await send('catch',{target,press});tries++)await new Promise(done=>setTimeout(done,500))}
  return <div className="dr-controller kings">
   {rule&&<div className="dr-now"><Card card={board.card}/><div role="status"><b>{rule.title}</b><span>{rule.rule}</span></div></div>}
   {board.event?.drinkers.includes(id)&&<Drink amount={board.event.amount} why={board.event.caught?'The question master got you':rank==='K'?'The whole cup, '+cupSips+' pours':rule?.title??''}/>}
   {board.phase==='draw'&&(mine?<><h2>Your turn. Pull a card.</h2><div className="dr-fan" role="group" aria-label="Pick any card">{left.map((slot,i)=><button key={slot} aria-label={'Card '+(i+1)} disabled={busy} onClick={()=>{navigator.vibrate?.(25);void send('draw',{slot})}}><Card/></button>)}</div></>:<h2>{nameOf(room,board.turn)} is drawing…</h2>)}
-  {inRace&&(board.tapped.includes(id)?<h2>Safe! Watch who is last.</h2>:<button className="dr-slam" disabled={busy} onPointerDown={()=>{navigator.vibrate?.(40);void send('tap')}} onClick={e=>{if(e.detail===0)void send('tap')}}>{rank==='4'?'👇 FLOOR':'☝️ HEAVEN'}</button>)}
+  {inRace&&(board.tapped.includes(id)?<h2>Tapped! The slowest drinks.</h2>:<button className="dr-slam" disabled={race.sending} onPointerDown={slam} onClick={e=>{if(e.detail===0)slam()}}>{rank==='4'?'👇 FLOOR':'☝️ HEAVEN'}</button>)}
   {board.phase==='pick'&&(mine?<><h3>{rank==='8'?'Choose your mate':rank==='2'?'Who drinks?':'Who failed?'}</h3><People label="Choose a player" players={rank==='9'||rank==='T'?room.players:others} disabled={busy} choose={target=>void send('pick',{target})}/></>:<p>{nameOf(room,board.turn)} is choosing.</p>)}
   {board.phase==='honor'&&(board.tapped.includes(id)?null:<button className="dr-slam calm" disabled={busy} onClick={()=>void send('drank')}>🍺 That’s me, I drink</button>)}
   {board.phase==='rule'&&(mine?<form onSubmit={e=>{e.preventDefault();void send('rule',{text:text.trim()})}}><h3>Pour into the cup, then make a rule</h3><input aria-label="House rule" placeholder="No saying names" maxLength={60} value={text} onChange={e=>setText(e.target.value)}/><button className="pt-primary" disabled={busy||!text.trim()}>Make it law</button></form>:<p>{nameOf(room,board.turn)} is writing a house rule.</p>)}
   {mine&&(board.phase==='open'||board.phase==='honor')&&<button className="pt-primary" disabled={busy} onClick={()=>void send('done')}>{board.kings===4?'Cup finished!':'Done, next player'}</button>}
-  {board.master===id&&<div className="dr-master">{catching?<><h3>Who answered your question?</h3><People label="Choose who answered" players={others} disabled={busy} choose={target=>{setCatching(false);void send('catch',{target})}}/><button onClick={()=>setCatching(false)}>Cancel</button></>:<button onClick={()=>setCatching(true)}>❓ Someone answered my question</button>}</div>}
+  {board.master===id&&<div className="dr-master">{catching?<><h3>Who answered your question?</h3><People label="Choose who answered" players={others} disabled={busy} choose={target=>{setCatching(false);void catchPlayer(target)}}/><button onClick={()=>setCatching(false)}>Cancel</button></>:<button onClick={()=>setCatching(true)}>❓ Someone answered my question</button>}</div>}
   {(board.rules.length>0||matesOf(board,id).length>0)&&<div className="dr-notes">{matesOf(board,id).map(m=><p key={m}>🤝 {nameOf(room,m)} drinks when you do</p>)}{board.rules.map((r,i)=><p key={i}>📜 {r.text}</p>)}</div>}
  </div>;
 }

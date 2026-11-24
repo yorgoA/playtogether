@@ -121,3 +121,76 @@ function choose(b: BoardView, id: string, random: () => number): Record<string, 
   if (rich && rich !== poor && !b.bankEmpty?.includes(poor)) return { move: 'bank', give: rich, want: poor };
   return { move: 'end' };
 }
+
+// Claims cards, true or not, and accepts or calls what others claim.
+export async function playPyramid(phone: Phone) {
+  const { world } = phone;
+  while (!over(phone)) {
+    const b = phone.room?.pyramid;
+    if (phone.room?.phase === 'playing' && b && b.index >= 0) {
+      if (b.claim?.to === phone.id) {
+        await world.sleep(400 + world.random() * 1200);
+        await phone.command({ action: 'pyramidReply', index: b.index, call: world.random() < 0.5 });
+      } else if (!b.claim && world.random() < 0.15) {
+        const slots = b.slots!.flatMap((unused, slot) => (unused ? [slot] : []));
+        const others = phone.room.players.filter((p) => p.id !== phone.id && p.connected);
+        if (slots.length && others.length)
+          await phone.command({
+            action: 'pyramidClaim',
+            index: b.index,
+            slot: slots[Math.floor(world.random() * slots.length)],
+            target: others[Math.floor(world.random() * others.length)].id,
+          });
+      }
+    }
+    await world.sleep(400);
+  }
+}
+// The host turns the next card once the table is quiet.
+export async function hostPyramid(host: Phone, quietMs = 2500) {
+  while (!over(host)) {
+    const b = host.room?.pyramid;
+    await host.world.sleep(quietMs);
+    const now = host.room?.pyramid;
+    if (host.room?.phase === 'playing' && b && now && now.index === b.index && !now.claim)
+      await host.command({ action: 'pyramidFlip', index: now.index });
+  }
+}
+
+// Plays Kings Cup by the rules, with everyone joining in where a card asks them to.
+export async function playKings(phone: Phone, tapMs = () => 200 + phone.world.random() * 400) {
+  const { world } = phone;
+  let answered = -1;
+  while (!over(phone)) {
+    const b = phone.room?.kings;
+    if (phone.room?.phase === 'playing' && b) {
+      const send = (move: string, more = {}) => phone.command({ action: 'kings', move, seq: b.seq, ...more });
+      const others = b.order.filter((id) => id !== phone.id);
+      const other = others[Math.floor(world.random() * others.length)];
+      if (b.phase === 'race' && b.racers.includes(phone.id) && !b.tapped.includes(phone.id)) {
+        const shown = world.now();
+        await world.sleep(tapMs());
+        const ms = world.now() - shown;
+        // Like useRaceTap: the tap is sent until the server has it.
+        const racing = () =>
+          phone.room?.kings?.phase === 'race' && phone.room.kings.seq === b.seq && !over(phone);
+        while (racing() && !phone.room!.kings!.tapped.includes(phone.id) && !(await send('tap', { ms })))
+          await world.sleep(300);
+      } else if (b.phase === 'honor' && answered !== b.seq) {
+        answered = b.seq;
+        if (world.random() < 0.4) await send('drank');
+      } else if (b.turn === phone.id) {
+        if (b.phase === 'draw') {
+          const left = b.left.flatMap((there, slot) => (there ? [slot] : []));
+          await send('draw', { slot: left[Math.floor(world.random() * left.length)] });
+        } else if (b.phase === 'pick') await send('pick', { target: other });
+        else if (b.phase === 'rule') await send('rule', { text: 'No phones' });
+        else if (b.phase === 'open' || b.phase === 'honor') {
+          await world.sleep(1500);
+          await send('done');
+        }
+      }
+    }
+    await world.sleep(150);
+  }
+}

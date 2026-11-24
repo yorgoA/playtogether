@@ -29,11 +29,13 @@ export async function api(path:string,body?:Record<string,unknown>,token?:string
  }catch(e){throw e instanceof RoomError?e:new Error(lost)}
  finally{clearTimeout(timer)}
 }
-// A secret for one join, so repeating it gives back the same seat. randomUUID needs https, which Wi-Fi play lacks.
+// randomUUID needs https, which Wi-Fi play lacks.
+export const randomId=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
+// A secret for one join, so repeating it gives back the same seat.
 const joinKey='playtogether.join';
 function joinId(code:string):string {
  try{const kept=JSON.parse(sessionStorage.getItem(joinKey)||'null');if(kept?.code===code&&typeof kept.id==='string')return kept.id}catch{}
- const id=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
+ const id=randomId();
  try{sessionStorage.setItem(joinKey,JSON.stringify({code,id}))}catch{}
  return id;
 }
@@ -85,6 +87,18 @@ export function useSignal(room:Room|null,clock:()=>number) {
   return ()=>clearTimeout(timer);
  },[signalAt,playing,clock]);
  return {go:signalAt!==null&&fired===signalAt,shownAt};
+}
+// How fast a player taps after this phone shows a Kings Cup race, sent until the server has it.
+export function useRaceTap(seq:number|null,command:(body:Record<string,unknown>)=>Promise<boolean>) {
+ const [tap,setTap]=useState<{ms:number}|null>(null),shown=useRef(0);
+ useEffect(()=>{shown.current=performance.now();return ()=>setTap(null)},[seq]);
+ useEffect(()=>{
+  if(seq===null||!tap)return;
+  let active=true;
+  (async()=>{while(active&&!await command({action:'kings',move:'tap',seq,ms:tap.ms}))await new Promise(done=>setTimeout(done,300))})();
+  return ()=>{active=false};
+ },[seq,tap,command]);
+ return {sending:!!tap,tap(){setTap(was=>was??{ms:Math.max(0,performance.now()-shown.current)})}};
 }
 // Keeps the first reaction tap of a round and sends it until the server has it, so a lost message costs no time.
 export function useTap(room:Room|null,id:string|undefined,command:(body:Record<string,unknown>)=>Promise<boolean>) {

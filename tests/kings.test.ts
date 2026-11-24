@@ -3,6 +3,7 @@ import { RoomSnapshot } from '../lib/contract';
 import { POST as account } from '../app/api/profile/route';
 import { POST as roomPost } from '../app/api/rooms/[code]/route';
 import { POST as createRoute } from '../app/api/rooms/route';
+import { raceGraceMs } from '../lib/server/kings';
 import { mutate, snapshot } from '../lib/server/session';
 import { cookieFrom, json, post } from './api-helpers';
 import { useDatabase } from './database';
@@ -51,7 +52,7 @@ describe('Kings Cup', () => {
   });
 
   it('pours for every kind of card', () => {
-    const { board, send, draw, id, scores } = match();
+    const { room, board, send, draw, id, scores } = match();
     draw(0, 'AS');
     expect(scores()).toEqual([-1, -1, -1]);
     send(0, 'done');
@@ -65,6 +66,8 @@ describe('Kings Cup', () => {
     send(2, 'tap');
     expect(board.phase).toBe('race');
     send(0, 'tap');
+    expect(board.phase).toBe('race');
+    mutate(room, { action: 'view' }, room.hostToken, T0 + raceGraceMs);
     expect(board.event?.drinkers).toEqual([id(1)]);
     send(2, 'done');
     draw(0, 'JS');
@@ -75,6 +78,95 @@ describe('Kings Cup', () => {
     draw(1, 'TS');
     send(1, 'pick', { target: id(1) });
     expect(scores()).toEqual([-1, -4, -2]);
+  });
+
+  function race(players = 3) {
+    const t = match(players);
+    t.draw(0, '4S');
+    const tap = (seat: number, now: number, ms?: number) =>
+      t.play(
+        seat,
+        { action: 'kings', move: 'tap', seq: t.board.seq, ...(ms === undefined ? {} : { ms }) },
+        now,
+      );
+    const view = (now: number) => t.host({ action: 'view' }, now);
+    return { ...t, tap, view };
+  }
+  it('gives the race to the slowest tap, whatever order the taps arrive in', () => {
+    const { board, tap, id, scores } = race();
+    tap(0, T0 + 500, 480);
+    tap(1, T0 + 700, 690);
+    tap(2, T0 + 2000, 400);
+    expect(board.phase).toBe('open');
+    expect(board.event?.drinkers).toEqual([id(1)]);
+    expect(scores()).toEqual([0, -1, 0]);
+  });
+  it('counts the first tap only, and makes a tie drink together', () => {
+    const { tap, scores } = race();
+    tap(0, T0 + 500, 400);
+    tap(0, T0 + 600, 50);
+    tap(1, T0 + 700, 600);
+    tap(2, T0 + 800, 600);
+    expect(scores()).toEqual([0, -1, -1]);
+  });
+  it('does not believe a tap faster than its delay allows, or slower than the race itself', () => {
+    const { board, tap } = race();
+    tap(0, T0 + 5000, 10);
+    tap(1, T0 + 5000, 99_999);
+    tap(2, T0 + 5000);
+    expect(Object.values(board.times!)).toEqual([2000, 5000, 5000]);
+  });
+  it('waits for the last phone, then makes it drink', () => {
+    const { board, tap, view, scores, id } = race();
+    tap(0, T0 + 500, 400);
+    view(T0 + 60_000);
+    expect(board.phase).toBe('race');
+    tap(1, T0 + 900, 800);
+    view(T0 + 900 + raceGraceMs - 1);
+    expect(board.phase).toBe('race');
+    view(T0 + 900 + raceGraceMs);
+    view(T0 + 900 + raceGraceMs + 5000);
+    expect(board.event?.drinkers).toEqual([id(2)]);
+    expect(scores()).toEqual([0, 0, -1]);
+  });
+  it('stops the race clock while paused', () => {
+    const { board, tap, host, view } = race();
+    tap(0, T0 + 500, 400);
+    tap(1, T0 + 600, 500);
+    host({ action: 'pause' }, T0 + 700);
+    view(T0 + 100_000);
+    expect(board.phase).toBe('race');
+    host({ action: 'resume' }, T0 + 100_000);
+    tap(2, T0 + 100_200, 300);
+    expect(board.times).toEqual(expect.objectContaining({ [board.order[2]]: 300 }));
+  });
+  it('starts the next race fresh', () => {
+    const { board, tap, send, draw } = race();
+    for (const seat of [0, 1, 2]) tap(seat, T0 + 500, 100 * (seat + 1));
+    send(0, 'done');
+    draw(1, '7S');
+    expect(board).toMatchObject({ phase: 'race', tapped: [], raceUntil: undefined, times: undefined });
+  });
+  it('never sends race times or presses', () => {
+    const { room, tap } = race();
+    tap(0, T0 + 500, 431);
+    const json = JSON.stringify(snapshot(room, T0, room.hostToken));
+    for (const secret of ['times', 'raceAt', 'raceUntil', 'presses', '431'])
+      expect(json).not.toContain(secret);
+  });
+  it('counts a repeated catch once, and a new one again', () => {
+    const { send, draw, id, scores, board, play } = match();
+    draw(0, 'QS');
+    const press = 'one-press-1';
+    const seq = board.seq;
+    send(0, 'catch', { target: id(1), press });
+    send(0, 'catch', { target: id(1), press });
+    send(0, 'done');
+    // The repeat may arrive after the table has moved on.
+    play(0, { action: 'kings', move: 'catch', seq, target: id(1), press });
+    expect(scores()).toEqual([0, -1, 0]);
+    send(0, 'catch', { target: id(1), press: 'another-press' });
+    expect(scores()).toEqual([0, -2, 0]);
   });
 
   it('makes mates drink together and lets the question master catch people', () => {

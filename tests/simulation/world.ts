@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { vi } from 'vitest';
+import { POST as account } from '../../app/api/profile/route';
 import { GET as viewRoom, POST as commandRoom } from '../../app/api/rooms/[code]/route';
 import { POST as createRoom } from '../../app/api/rooms/route';
 import { useDatabase as openDatabase } from '../database';
@@ -24,6 +25,7 @@ export function seeded(seed: number) {
 
 const call = (path: string, init: RequestInit) => {
   const request = new Request('http://localhost' + path, init);
+  if (path === '/api/profile') return account(request);
   const code = path.split('/')[3];
   if (!code) return createRoom(request);
   const context = { params: Promise.resolve({ code }) };
@@ -79,6 +81,7 @@ export function virtualWorld(seed: number, databaseMs = 5) {
   async function run<T>(work: () => Promise<T>, limitMs = 60 * 60_000): Promise<T> {
     const end = time + limitMs;
     let done = false;
+    let idle = 0;
     const result = work().finally(() => {
       done = true;
     });
@@ -88,7 +91,13 @@ export function virtualWorld(seed: number, databaseMs = 5) {
       if (done) break;
       timers.sort((a, b) => a.at - b.at || a.order - b.order);
       const next = timers.shift();
-      if (!next) throw new Error('The simulation is stuck: nothing is waiting to happen.');
+      if (!next) {
+        // Hashing runs outside the virtual clock, so give it a moment of real time.
+        if (++idle > 400) throw new Error('The simulation is stuck: nothing is waiting to happen.');
+        await new Promise((r) => setTimeout(r, 5));
+        continue;
+      }
+      idle = 0;
       if (next.at > end) throw new Error('The simulation did not finish in time.');
       time = Math.max(time, next.at);
       next.wake();

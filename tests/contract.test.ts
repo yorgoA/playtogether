@@ -34,6 +34,8 @@ describe('what the screens send is accepted', () => {
   const player = [
     { action: 'join', name: 'Ana', avatar: '🦊', color: '#c3f76a' },
     { action: 'join', name: 'Ana', joinId: '0123456789abcdef' },
+    { action: 'kings', move: 'tap', seq: 3, ms: 412.5 },
+    { action: 'kings', move: 'catch', seq: 3, target: 'someone', press: '0123456789abcdef' },
     { action: 'ready', ready: true },
     { action: 'input', round: 2, value: 3 },
     { action: 'input', round: 2, early: true },
