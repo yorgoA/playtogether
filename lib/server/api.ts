@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { CreateRoomRequest, RoomCommand } from '../contract';
 import { GameError } from './games';
 import { mutate, newRoom, snapshot, type Room } from './session';
 
@@ -17,6 +18,12 @@ async function body(req: Request): Promise<Record<string, unknown>> {
   } catch {}
   throw new GameError('Enter valid room settings.');
 }
+// The first problem found, named by field, so a screen's developer can see what to fix.
+function invalid(error: { issues: { path: PropertyKey[]; message: string }[] }): never {
+  const issue = error.issues[0];
+  const field = issue?.path.join('.');
+  throw new GameError('Invalid request' + (field ? ': ' + field + ' — ' + issue.message : '.'));
+}
 const reply = (value: unknown, status = 200) =>
   Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 function failure(e: unknown) {
@@ -30,8 +37,10 @@ function makeCode() {
 }
 export async function create(req: Request) {
   try {
-    const command = await body(req),
-      store = db(),
+    const command = await body(req);
+    const checked = CreateRoomRequest.safeParse(command);
+    if (!checked.success) invalid(checked.error);
+    const store = db(),
       now = Date.now();
     await store.prepare('DELETE FROM rooms WHERE expires < ?').bind(now).run();
     for (let i = 0; i < 8; i++) {
@@ -55,6 +64,8 @@ export async function handle(req: Request, rawCode: string) {
     const store = db(),
       token = (req.headers.get('Authorization') || '').replace(/^Bearer /i, '');
     const command = req.method === 'GET' ? { action: 'view' } : await body(req);
+    const checked = RoomCommand.safeParse(command);
+    if (!checked.success) invalid(checked.error);
     for (let i = 0; i < 12; i++) {
       const now = Date.now();
       const row = await store

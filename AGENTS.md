@@ -7,13 +7,17 @@ Several people and AI agents work here at the same time. These rules keep their 
 | Area | Files |
 | --- | --- |
 | Frontend | `app/page.tsx`, `app/layout.tsx`, `app/join/`, `app/globals.css`, `components/`, `public/`, `lib/arcade/`, `lib/controller/`, `lib/catalog.ts` |
-| Backend | `app/api/`, `lib/server/`, `lib/island/`, `db/`, `drizzle/`, `worker/`, `tests/`, `.github/`, config files in the root |
+| Backend | `app/api/`, `lib/server/`, `lib/contract/`, `lib/island/`, `db/`, `drizzle/`, `worker/`, `tests/`, `.github/`, config files in the root |
 
 Change only your own area. When a task needs the other area, such as a new API field, stop and say what you need so its owner can make the change. A small edit that cannot land separately is fine if the pull request description points it out.
 
 `lib/island/board.ts` runs on the server and on phones. It is backend-owned, and changes to its exports need a matching frontend change.
 
-The API routes, their request fields and the response types in `lib/controller/room.ts` are the contract between the two areas. Adding a field is safe. Renaming or removing one needs both owners.
+The contract between the two areas is `lib/contract/` (Zod schemas for every request and response). The server rejects requests that do not match it, with a 400 naming the field, and `tests/contract.test.ts` checks real responses against it. Screens can import its types: `import type { RoomSnapshot } from '@/lib/contract'`.
+
+- Changing the API means changing `lib/contract/` first. A response field the contract does not list fails CI, so a leak of private data fails too. Removing or retyping a field that `lib/controller/room.ts` reads fails `npm run typecheck`.
+- Adding a field: backend adds it to the contract and the server in one pull request; the screens may use it once that is merged.
+- Renaming or removing a field needs both owners.
 
 ## Branches and pull requests
 
