@@ -1,6 +1,15 @@
 export const resources = ['timber', 'clay', 'grain', 'wool', 'ore'] as const;
 export type Resource = (typeof resources)[number];
 export type Hand = Record<Resource, number>;
+export const resourceNames: Record<Resource, string> = {
+  timber: 'Wood',
+  clay: 'Brick',
+  grain: 'Wheat',
+  wool: 'Sheep',
+  ore: 'Stone',
+};
+// Cards of each resource in the game. What nobody holds is in the bank.
+export const bankSize = 19;
 export const emptyHand = (): Hand => ({ timber: 0, clay: 0, grain: 0, wool: 0, ore: 0 });
 export const costs = {
   road: { timber: 1, clay: 1 },
@@ -104,17 +113,25 @@ export type Island = {
   roads: Record<number, string>;
   dice: number[];
   event: string;
-  offer: null | { give: Resource; want: Resource };
+  offer: null | { give: Hand; want: Hand };
   hands: Record<string, Hand>;
 };
 export type BoardView = Omit<Island, 'hands' | 'deck' | 'dev'> & {
   hand?: Hand;
   handSizes?: Record<string, number>;
+  // Resources the bank has run out of. Exact counts would reveal hands.
+  bankEmpty?: Resource[];
   devHand?: HeldCard[];
   devSizes?: Record<string, number>;
   deckLeft?: number;
 };
 export const active = (b: BoardView) => b.order[b.turn];
+export const covers = (hand: Hand, cards: Hand) => resources.every((r) => hand[r] >= cards[r]);
+export const toHand = (cards: readonly Resource[]) => {
+  const hand = emptyHand();
+  for (const r of cards) hand[r]++;
+  return hand;
+};
 export const handSize = (hand: Hand) => Object.values(hand).reduce((sum, n) => sum + n, 0);
 export function piecesBuilt(b: BoardView, id: string): Record<Piece, number> {
   const homes = Object.values(b.homes).filter((h) => h.id === id);

@@ -1,4 +1,4 @@
-import { locations, resources, robberTile, tilesOf, type BoardView } from '../../lib/island/board';
+import { covers, locations, resources, robberTile, tilesOf, type BoardView } from '../../lib/island/board';
 import type { Phone } from './phone';
 
 const over = (phone: Phone) => phone.room?.phase === 'results' || phone.expired;
@@ -81,7 +81,7 @@ function choose(b: BoardView, id: string, random: () => number): Record<string, 
     if (!owed) return null;
     return { move: 'discard', cards: resources.flatMap((r) => Array(hand[r]).fill(r)).slice(0, owed) };
   }
-  if (b.order[b.turn] !== id) return b.offer && hand[b.offer.want] ? { move: 'accept' } : null;
+  if (b.order[b.turn] !== id) return b.offer && covers(hand, b.offer.want) ? { move: 'accept' } : null;
   const value = (v: number) =>
     tilesOf(b).reduce((n, t) => n + (t.number && t.vs.includes(v) ? 6 - Math.abs(7 - t.number) : 0), 0);
   if (b.phase === 'settlement')
@@ -108,6 +108,6 @@ function choose(b: BoardView, id: string, random: () => number): Record<string, 
     return { move: 'place', piece: 'road', index: pick(spots('road')) };
   const rich = resources.find((r) => hand[r] >= 5);
   const poor = [...resources].sort((x, y) => hand[x] - hand[y])[0];
-  if (rich && rich !== poor) return { move: 'bank', give: rich, want: poor };
+  if (rich && rich !== poor && !b.bankEmpty?.includes(poor)) return { move: 'bank', give: rich, want: poor };
   return { move: 'end' };
 }

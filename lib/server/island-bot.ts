@@ -4,6 +4,8 @@ import {
   active,
   affordable,
   affordsDev,
+  covers,
+  handSize,
   devCost,
   playable,
   costs,
@@ -16,6 +18,7 @@ import {
   type Piece,
   type Resource,
 } from '../island/board';
+import { bankLeft } from './island';
 
 function landValue(board: Island, id: string, index: number) {
   const existing = new Set(
@@ -43,7 +46,11 @@ export function botMove(board: Island, id: string) {
   }
   if (active(board) !== id) {
     const offer = board.offer;
-    return offer && hand[offer.want] > 0 && hand[offer.want] > hand[offer.give] ? { move: 'accept' } : null;
+    if (!offer || !covers(hand, offer.want) || handSize(offer.give) < handSize(offer.want)) return null;
+    // Trade what is plentiful for what is scarce.
+    const wanted = Math.min(...resources.filter((r) => offer.want[r]).map((r) => hand[r]));
+    const given = Math.min(...resources.filter((r) => offer.give[r]).map((r) => hand[r]));
+    return wanted > given ? { move: 'accept' } : null;
   }
   function place(piece: Piece, choices: number[]) {
     const score = (index: number) => {
@@ -89,9 +96,10 @@ export function botMove(board: Island, id: string) {
       if (piece !== 'road' && affordable(hand, piece)) return place(piece, choices);
     if (can('knight')) return { move: 'playDev', card: 'knight' };
     if (can('roads')) return { move: 'playDev', card: 'roads' };
-    const low = [...resources].sort((a, b) => hand[a] - hand[b]);
-    if (can('bounty')) return { move: 'playDev', card: 'bounty', cards: low.slice(0, 2) };
-    if (can('monopoly')) return { move: 'playDev', card: 'monopoly', resource: low[0] };
+    const bank = bankLeft(board);
+    const low = resources.filter((r) => bank[r]).sort((a, b) => hand[a] - hand[b]);
+    if (can('bounty') && low.length > 1) return { move: 'playDev', card: 'bounty', cards: low.slice(0, 2) };
+    if (can('monopoly') && low.length) return { move: 'playDev', card: 'monopoly', resource: low[0] };
     if (board.deck?.length && affordsDev(hand)) return { move: 'buyDev' };
     for (const { piece, choices } of options) if (affordable(hand, piece)) return place(piece, choices);
   }
@@ -108,6 +116,7 @@ export function botMove(board: Island, id: string) {
   const want = ranked[0],
     give = ranked[ranked.length - 1];
   if (phase === 'harvest') return { move: 'harvest', resource: want };
-  if (spare(want) < 0 && spare(give) >= tradeRate(board, id, give)) return { move: 'bank', give, want };
+  if (spare(want) < 0 && bankLeft(board)[want] && spare(give) >= tradeRate(board, id, give))
+    return { move: 'bank', give, want };
   return { move: 'end' };
 }

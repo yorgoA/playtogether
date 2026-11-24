@@ -1,3 +1,4 @@
+import { toHand } from '../lib/island/board';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import { GET as afterHours } from '../app/api/after-hours/route';
@@ -44,6 +45,7 @@ describe('what the screens send is accepted', () => {
     { action: 'island', move: 'steal', revision: 4, target: 'someone' },
     { action: 'island', move: 'harvest', revision: 4, resource: 'grain' },
     { action: 'island', move: 'offer', revision: 4, give: 'ore', want: 'wool' },
+    { action: 'island', move: 'offer', revision: 4, giveCards: ['ore', 'clay'], wantCards: ['wool'] },
     { action: 'island', move: 'bank', revision: 4, give: 'ore', want: 'wool' },
     { action: 'island', move: 'accept', revision: 4 },
     { action: 'island', move: 'end', revision: 4 },
@@ -194,7 +196,7 @@ describe('what the server sends fits the contract', () => {
     expect(board.island?.hand).toBeDefined();
     expect(snapshot(room, T0, room.hostToken).island?.hand).toBeUndefined();
     play(seat, { action: 'island', move: 'place', piece: 'settlement', index: 0, revision: 0 });
-    room.island!.offer = { give: 'ore', want: 'wool' };
+    room.island!.offer = { give: toHand(['ore', 'ore']), want: toHand(['wool']) };
     room.island!.owed = { [seats[0].id]: 2 };
     room.island!.victims = [seats[1].id];
     fits(RoomSnapshot, snapshot(room, T0, seats[0].token));
