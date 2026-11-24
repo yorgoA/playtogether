@@ -43,6 +43,8 @@
 @keyframes isl-tumble{from{transform:rotate3d(1,.7,.4,0deg)}to{transform:rotate3d(1,.7,.4,360deg)}}
 @media(max-width:900px){.isl-table .isl-dice{top:auto;bottom:60px;right:18px}.isl-banner{max-width:calc(100% - var(--rail) - 40px)}.isl-news{top:auto;bottom:56px;max-width:50%}}
 
+.isl-cards{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-variant-numeric:tabular-nums}.isl-cards i{width:.8em;height:1.1em;border-radius:3px;background:#ffd166;border:1.5px solid #12303c;box-shadow:3px -1px 0 -1px #e0a93a}.isl-built .isl-cards{margin-left:auto}
+
 /* Phone */
 .isl-atlas{position:relative;min-width:0;background:radial-gradient(ellipse at center,#2aa5c4,#0f6f9e 75%)}
 .isl-pan{overflow:auto}.isl-pan svg{display:block;margin:auto}
@@ -67,6 +69,7 @@
 .isl-cost{display:inline-flex;gap:3px}.isl-cost>span{display:grid;place-items:center;width:25px;height:25px;border-radius:7px;background:#fffaf0}.isl-cost .missing{background:#ffffff1a}.isl-cost .missing svg{opacity:.4}.isl-cost svg{width:19px;height:19px}
 .isl-costs{display:grid;gap:5px}.isl-costs>div{display:grid;grid-template-columns:26px 1fr auto;align-items:center;gap:9px;padding:5px 10px;border-radius:10px;background:#113f55}.isl-costs>div>svg{width:24px;height:24px}
 .pt-phone .isl-controller h3{display:flex;justify-content:space-between;margin:auto 0 0;padding-top:4px;font-size:.95rem}.isl-mine{display:flex;gap:12px}.isl-mine svg{width:19px;height:19px}
+.isl-mine em{font-style:normal;font-weight:500;color:#c6dfe6}.isl-rivals{display:flex;gap:6px}.isl-rivals>span{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:4px 9px;border-left:4px solid;border-radius:8px;background:#113f55;font-size:.85rem}.isl-rivals b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.isl-costs small{margin-left:5px;font-weight:500;color:#bcdbe4}
 .isl-hand{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}.isl-card{display:grid;justify-items:center;padding:5px 0 4px;border-radius:12px;border-bottom:5px solid;background:#fffaf0;color:#12303c}.isl-card svg{width:30px;height:30px}.isl-card strong{font-size:1.35rem;line-height:1.05}.isl-card small{font-size:.75rem;text-transform:capitalize}.isl-card.empty{background:#c8d6d8}.isl-card.empty svg{opacity:.45}
 .isl-card.timber{border-color:#4c8f4d}.isl-card.clay{border-color:#c96f45}.isl-card.grain{border-color:#e6b53c}.isl-card.wool{border-color:#8fc953}.isl-card.ore{border-color:#8d97a8}
 @media(max-height:620px){.isl-card svg{display:none}.pt-phone .isl-controller .isl-roll{min-height:54px}}

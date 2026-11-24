@@ -4,7 +4,7 @@ PlayTogether turns a shared screen into a game table and each player's phone int
 
 ## Island Settlers
 
-The shared screen shows the island, settlements, roads, ports, dice, and construction costs. Players use their phones to view their hand and choose actions for the current phase. Add bots to fill seats when playing solo or with a smaller group.
+The shared screen shows the island, settlements, roads, ports, dice, and how many cards each player holds. Players use their phones to view their hand, construction costs, and remaining pieces (15 roads, 5 settlements, 4 cities), and choose actions for the current phase. Add bots to fill seats when playing solo or with a smaller group.
 
 ## Run locally
 
