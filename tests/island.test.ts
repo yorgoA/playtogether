@@ -25,7 +25,7 @@ import {
   type Hand,
   type Island,
 } from '../lib/island/board';
-import { islandMove, newIsland, startIsland, totalPoints } from '../lib/server/island';
+import { bankLeft, islandMove, newIsland, startIsland, totalPoints } from '../lib/server/island';
 import { botMove } from '../lib/server/island-bot';
 
 afterEach(() => vi.restoreAllMocks());
@@ -271,6 +271,32 @@ describe('trading', () => {
     expect(b.hands).toEqual({ a: cards({ wool: 1 }), b: cards({ ore: 1 }) });
     expect(b.offer).toBeNull();
   });
+  it('trades several cards at once and keeps every card in play', () => {
+    const b = building({ a: cards({ ore: 2, clay: 1 }), b: cards({ wool: 2 }) });
+    const offer = (giveCards: unknown, wantCards: unknown) =>
+      move(b, 'a', { move: 'offer', giveCards, wantCards });
+    expect(() => offer(['ore', 'ore', 'ore'], ['wool'])).toThrow('more cards');
+    expect(() => offer(['ore'], ['ore', 'wool'])).toThrow('different');
+    expect(() => offer([], ['wool'])).toThrow('Choose cards');
+    expect(() => offer(['ore'], [])).toThrow('Choose cards');
+    expect(() => offer(['gold'], ['wool'])).toThrow('Choose cards');
+    expect(() => offer(['ore'], Array(20).fill('wool'))).toThrow('too many');
+    offer(['ore', 'ore', 'clay'], ['wool', 'wool']);
+    move(b, 'b', { move: 'accept' });
+    expect(b.hands).toEqual({ a: cards({ wool: 2 }), b: cards({ ore: 2, clay: 1 }) });
+  });
+  it('needs every card asked for', () => {
+    const b = building({ a: cards({ ore: 1 }), b: cards({ wool: 1 }) });
+    move(b, 'a', { move: 'offer', giveCards: ['ore'], wantCards: ['wool', 'wool'] });
+    expect(() => move(b, 'b', { move: 'accept' })).toThrow('both cards');
+    expect(b.hands.b).toEqual(cards({ wool: 1 }));
+  });
+  it('drops an offer saved in the old format', () => {
+    const b = building({ a: cards({ ore: 1 }), b: cards({ wool: 1 }) });
+    b.offer = { give: 'ore', want: 'wool' } as never;
+    expect(() => move(b, 'b', { move: 'accept' })).toThrow('no offer');
+    expect(b.offer).toBeNull();
+  });
   it('needs the accepting player to hold the card', () => {
     const b = building({ a: cards({ ore: 1 }), b: emptyHand() });
     move(b, 'a', { move: 'offer', give: 'ore', want: 'wool' });
@@ -321,6 +347,47 @@ describe('piece limits', () => {
     for (let v = 0; v < limits.city; v++) b.homes[v] = { id: 'a', city: true };
     b.homes[40] = { id: 'a', city: false };
     expect(() => move(b, 'a', { move: 'place', piece: 'city', index: 40 })).toThrow('highlighted');
+  });
+});
+
+describe('bank', () => {
+  function rollEight(homes: Record<number, { id: string; city: boolean }>, held: number) {
+    const b = afterSetup();
+    b.homes = homes;
+    b.phase = 'roll';
+    const r = tiles[eight].resource as keyof Hand;
+    b.hands = { a: emptyHand(), b: cards({ [r]: held }) };
+    rolls(4, 4);
+    move(b, 'a', { move: 'roll' });
+    return { b, r };
+  }
+  const eight = tiles.findIndex((t) => t.number === 8),
+    [x, , y] = tiles[eight].vs;
+  it('holds 19 of each resource', () => {
+    const b = afterSetup();
+    b.hands = { a: cards({ ore: 4 }), b: cards({ ore: 2, wool: 19 }) };
+    expect(bankLeft(b)).toEqual({ timber: 19, clay: 19, grain: 19, wool: 0, ore: 13 });
+  });
+  it('gives a lone player what is left', () => {
+    const { b, r } = rollEight({ [x]: { id: 'a', city: true } }, 18);
+    expect([b.hands.a[r], bankLeft(b)[r]]).toEqual([1, 0]);
+    expect(b.event).toContain('short');
+  });
+  it('gives nobody anything when several players are short', () => {
+    const { b, r } = rollEight({ [x]: { id: 'a', city: true }, [y]: { id: 'b', city: false } }, 17);
+    expect([b.hands.a[r], b.hands.b[r]]).toEqual([0, 17]);
+  });
+  it('cannot trade or hand out cards it does not have', () => {
+    const b = afterSetup();
+    b.phase = 'build';
+    b.homes = {};
+    b.hands = { a: cards({ ore: 4 }), b: cards({ wool: 18, clay: 19 }) };
+    b.dev = { a: [{ kind: 'bounty', fresh: false }] };
+    expect(() => move(b, 'a', { move: 'bank', give: 'ore', want: 'clay' })).toThrow('no Brick left');
+    expect(() => move(b, 'a', { move: 'playDev', card: 'bounty', cards: ['wool', 'wool'] })).toThrow('bank');
+    expect(b.dev.a).toHaveLength(1);
+    move(b, 'a', { move: 'playDev', card: 'bounty', cards: ['wool', 'timber'] });
+    expect(b.hands.a).toEqual(cards({ ore: 4, wool: 1, timber: 1 }));
   });
 });
 
@@ -498,6 +565,7 @@ describe('bots', () => {
         move(b, id!, botMove(b, id!)!);
         for (const hand of Object.values(b.hands))
           for (const n of Object.values(hand)) expect(n).toBeGreaterThanOrEqual(0);
+        for (const n of Object.values(bankLeft(b))) expect(n).toBeGreaterThanOrEqual(0);
       }
       vi.restoreAllMocks();
     }

@@ -66,6 +66,9 @@ const playerCommands = [
     cards: z.array(Resource).max(40).optional(),
     target: z.string().max(60).optional(),
     resource: Resource.optional(),
+    // For offers of several cards; `give` and `want` still work for one each.
+    giveCards: z.array(Resource).max(19).optional(),
+    wantCards: z.array(Resource).max(19).optional(),
     give: Resource.optional(),
     want: Resource.optional(),
   }),
@@ -155,11 +158,12 @@ const Island = z
     roads: z.record(z.string(), z.string()),
     dice: z.array(z.number()),
     event: z.string(),
-    offer: z.object({ give: Resource, want: Resource }).strict().nullable(),
+    offer: z.object({ give: Hand, want: Hand }).strict().nullable(),
     hand: Hand.optional(),
     handSizes: z.record(z.string(), z.number()),
     // Development cards: only the viewer's own are listed. The deck itself is never sent.
     devHand: z.array(HeldCard).optional(),
+    bankEmpty: z.array(Resource),
     devSizes: z.record(z.string(), z.number()),
     deckLeft: z.number(),
     devPlayed: z.boolean().optional(),

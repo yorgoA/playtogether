@@ -53,6 +53,8 @@
 .pt-session .isl-construction p{display:flex;flex-wrap:wrap;gap:3px 9px;margin:0;padding-top:6px;border-top:1px solid #12303c26;font-size:.85em;line-height:1.2;color:#12303c}.isl-construction p span{display:inline-flex;align-items:center;gap:3px}.isl-construction p svg{width:1.25em;height:1.25em}
 @media(max-height:660px){.isl-construction p{display:none!important}.isl-construction>div{padding:2px 0}.isl-seats{gap:6px}.isl-seat{padding:5px 10px}}
 
+.isl-table .isl-offer{top:auto;bottom:62px;max-width:16%;gap:3px 8px;padding:8px 12px;font-size:clamp(.75rem,.95vw,1.15rem);line-height:1.2}
+
 /* Phone */
 .isl-atlas{position:relative;min-width:0;background:radial-gradient(ellipse at center,#2aa5c4,#0f6f9e 75%)}
 .isl-pan{overflow:auto}.isl-pan svg{display:block;margin:auto}
@@ -83,7 +85,10 @@
 .isl-controller .isl-hide{right:auto;left:6px}.isl-controller .isl-show-map{align-self:stretch;background:#0f4058;color:#d9eef4}
 .isl-trade{grid-template-columns:1fr}.pt-phone .isl-trade h4{margin:4px 0 0;font-size:1rem;font-weight:700}
 .isl-pick{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}.pt-phone .isl-controller .isl-pick button{display:grid;justify-items:center;align-content:center;gap:2px;padding:6px 0;background:#fffaf0;color:#12303c;font-size:.85rem}.isl-pick svg{width:30px;height:30px}.isl-pick small{font-size:.75rem;color:#38545f}.pt-phone .isl-controller .isl-pick button[aria-pressed=true]{outline:4px solid #ffd166;outline-offset:-1px}.pt-phone .isl-controller .isl-pick button:disabled{opacity:.4}
-.isl-deal{display:grid;grid-template-columns:1fr 1fr;gap:6px}.pt-phone .isl-deal p{display:grid;justify-items:center;gap:4px;padding:10px;border-radius:12px;background:#113f55}.isl-deal svg{width:48px;height:48px}.isl-deal b{color:#fff}
+.isl-deal{display:grid;grid-template-columns:1fr 1fr;gap:6px}.isl-deal>div{display:grid;align-content:start;justify-items:center;gap:8px;padding:10px;border-radius:12px;background:#113f55;color:#c6dfe6}.isl-deal .isl-bundle{justify-content:center;color:#fff}.isl-deal .isl-bundle svg{width:38px;height:38px}
+.isl-bundle{display:inline-flex;flex-wrap:wrap;gap:4px 10px}.isl-bundle>span{display:inline-flex;align-items:center;gap:5px}.isl-bundle svg{width:1.7em;height:1.7em}
+.isl-trade h4{display:flex;align-items:center;justify-content:space-between}.pt-phone .isl-controller .isl-trade h4 button{min-height:30px;padding:2px 12px;font-size:.85rem}.pt-phone .isl-controller .isl-hint{font-size:.9rem}
+.pt-phone .isl-controller .isl-pick button[aria-pressed=true]:disabled{opacity:.8}
 /* With the map hidden, everything else grows into its space. */
 .roomy .isl-shop{flex:1 1 0;max-height:340px;grid-auto-rows:1fr}.pt-phone .roomy .isl-shop button,.pt-phone .roomy .isl-shop button:disabled{grid-template-columns:44px minmax(0,1fr) auto;font-size:1.1rem}.roomy .isl-shop button>svg{width:42px;height:42px}.roomy .isl-shop .isl-cost{flex-wrap:wrap;justify-content:flex-end;max-width:112px}.roomy .isl-cost>span{width:34px;height:34px}.roomy .isl-cost svg{width:27px;height:27px}.pt-phone .roomy .isl-shop small{font-size:.9rem}
 .roomy .isl-costs{gap:8px}.roomy .isl-costs>div{grid-template-columns:34px 1fr auto;padding:10px 12px;font-size:1.05rem}.roomy .isl-costs>div>svg{width:32px;height:32px}

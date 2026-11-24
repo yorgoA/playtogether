@@ -1,4 +1,4 @@
-import type {DevCard,Piece,Resource} from '@/lib/island/board';
+import {resourceNames,type DevCard,type Piece,type Resource} from '@/lib/island/board';
 // Drawn on a 24x24 grid so the same artwork works in React, SVG maps and canvas textures.
 type Shape=[path:string,color:string];
 export const resourceArt:Record<Resource,Shape[]>={
@@ -13,7 +13,7 @@ export const pieceArt:Record<Piece,string>={
  settlement:'M4 21V11l8-8l8 8v10z',
  city:'M2 21V10l5-6l5 6v3h10v8z',
 };
-export const resourceLabel:Record<Resource,string>={timber:'Wood',clay:'Brick',grain:'Wheat',wool:'Sheep',ore:'Stone'};
+export const resourceLabel=resourceNames;
 export function ResourceIcon({resource,className}:{resource:Resource,className?:string}){
  return <svg className={className} viewBox="-1 0 25 24" aria-hidden="true">{resourceArt[resource].map(([d,c],i)=><path key={i} d={d} fill={c}/>)}</svg>;
 }

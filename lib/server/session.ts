@@ -12,8 +12,8 @@ import { GameError, games, type Game, type RoundData } from './games';
 
 import { gameIds, type RoomSnapshot } from '../contract';
 import { claimPyramid, flipPyramid, newPyramid, pyramidView, resolvePyramid, type Pyramid } from './pyramid';
-import { islandMove, startIsland, totalPoints } from './island';
-import { active, goal, handSize, pointsFor, type Island } from '../island/board';
+import { bankLeft, islandMove, startIsland, totalPoints } from './island';
+import { active, goal, handSize, pointsFor, resources, type Island } from '../island/board';
 import { botMove } from './island-bot';
 type Player = {
   bot?: boolean;
@@ -466,6 +466,9 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
     ? (({ hands, deck, dev, ...publicBoard }) => ({
         ...publicBoard,
         hand: viewer ? hands[viewer.id] : undefined,
+        // An offer saved before offers could hold several cards.
+        offer: typeof publicBoard.offer?.give === 'string' ? null : publicBoard.offer,
+        bankEmpty: resources.filter((k) => !bankLeft(board)[k]),
         // How many cards everyone holds is public; which ones is not.
         handSizes: Object.fromEntries(Object.entries(hands).map(([id, hand]) => [id, handSize(hand)])),
         devHand: viewer && (dev?.[viewer.id] ?? []),

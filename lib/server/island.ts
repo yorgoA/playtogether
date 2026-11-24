@@ -3,6 +3,11 @@ import {
   tradeRate,
   active,
   affordable,
+  bankSize,
+  covers,
+  handSize,
+  resourceNames,
+  toHand,
   affordsDev,
   devCards,
   devCost,
@@ -20,6 +25,7 @@ import {
   tilesOf,
   type DevCard,
   type Island,
+  type Hand,
   type Resource,
   type Piece,
 } from '../island/board';
@@ -53,11 +59,19 @@ export function startIsland(order: string[]): Island {
     event: 'Everyone rolls. The highest roll starts.',
   };
 }
+export function bankLeft(b: Island) {
+  const left = emptyHand();
+  for (const r of resources)
+    left[r] = bankSize - Object.values(b.hands).reduce((sum, hand) => sum + hand[r], 0);
+  return left;
+}
 export const totalPoints = (b: Island, id: string) => pointsFor(b, id) + secretPoints(b.dev?.[id]);
 export function islandMove(b: Island, id: string, name: string, c: Record<string, unknown>) {
   const reject = (msg: string): never => {
     throw new GameError(msg, 409);
   };
+  // An offer left open by an earlier version, before offers could hold several cards.
+  if (typeof b.offer?.give === 'string') b.offer = null;
   if (c.revision !== b.revision) reject('The board changed. Choose your move again.');
   const mine = id === active(b),
     hand = b.hands[id];
@@ -76,11 +90,11 @@ export function islandMove(b: Island, id: string, name: string, c: Record<string
     if (mine || !b.offer || b.phase !== 'build') return reject('There is no offer to accept.');
     const { give, want } = b.offer,
       other = b.hands[active(b)];
-    if (!hand[want] || !other[give]) return reject('The trade needs both cards.');
-    other[give]--;
-    hand[give]++;
-    hand[want]--;
-    other[want]++;
+    if (!covers(hand, want) || !covers(other, give)) return reject('The trade needs both cards.');
+    for (const r of resources) {
+      other[r] += want[r] - give[r];
+      hand[r] += give[r] - want[r];
+    }
     b.offer = null;
     b.event = name + ' accepted the trade.';
   } else {
@@ -163,6 +177,8 @@ export function islandMove(b: Island, id: string, name: string, c: Record<string
       if (kind === 'bounty') {
         if (!Array.isArray(c.cards) || c.cards.length !== 2 || !c.cards.every(isResource))
           return reject('Choose two resources.');
+        if (!covers(bankLeft(b), toHand(c.cards as Resource[])))
+          return reject('The bank does not have those cards.');
         for (const r of c.cards as Resource[]) hand[r]++;
         b.event = name + ' took two resources from the bank.';
       } else if (kind === 'monopoly') {
@@ -209,14 +225,28 @@ export function islandMove(b: Island, id: string, name: string, c: Record<string
         }
         b.phase = Object.keys(b.owed).length ? 'discard' : 'robber';
       }
+      const due: Record<string, Hand> = {};
       for (const t of land)
         if (t.number === sum && t.resource !== 'sand' && t !== land[robberTile(b)])
           for (const v of t.vs) {
             const h = b.homes[v];
-            if (h) b.hands[h.id][t.resource] += h.city ? 2 : 1;
+            if (h) (due[h.id] ??= emptyHand())[t.resource] += h.city ? 2 : 1;
           }
+      const bank = bankLeft(b),
+        short: Resource[] = [];
+      for (const r of resources) {
+        const owed = Object.keys(due).filter((pid) => due[pid][r]);
+        const enough = owed.reduce((n, pid) => n + due[pid][r], 0) <= bank[r];
+        if (!enough) short.push(r);
+        // When the bank runs short, a lone player takes what is left and several get nothing.
+        for (const pid of owed)
+          if (enough) b.hands[pid][r] += due[pid][r];
+          else if (owed.length === 1) b.hands[pid][r] += bank[r];
+      }
       b.event =
         name + ' rolled ' + sum + (sum === 7 ? ' · the robber moves.' : '. Matching land produces supplies.');
+      if (short.length)
+        b.event += ' The bank is short of ' + short.map((r) => resourceNames[r]).join(' and ') + '.';
     } else if (c.move === 'robber' && b.phase === 'robber') {
       const index = c.index as number;
       if (!Number.isInteger(index) || !tilesOf(b)[index] || index === robberTile(b))
@@ -255,21 +285,30 @@ export function islandMove(b: Island, id: string, name: string, c: Record<string
       b.event = name + ' collected a harvest card.';
     } else if (
       b.phase === 'build' &&
-      (c.move === 'bank' || c.move === 'offer') &&
+      c.move === 'bank' &&
       isResource(c.give) &&
       isResource(c.want) &&
       c.give !== c.want
     ) {
-      const rate = c.move === 'bank' ? tradeRate(b, id, c.give) : 1;
+      const rate = tradeRate(b, id, c.give);
       if (hand[c.give] < rate) return reject('You need more cards for that trade.');
-      if (c.move === 'bank') {
-        hand[c.give] -= rate;
-        hand[c.want]++;
-        b.event = name + ' traded with the harbor.';
-      } else {
-        b.offer = { give: c.give, want: c.want };
-        b.event = name + ' offered a trade.';
-      }
+      if (!bankLeft(b)[c.want]) return reject('The bank has no ' + resourceNames[c.want] + ' left.');
+      hand[c.give] -= rate;
+      hand[c.want]++;
+      b.event = name + ' traded with the harbor.';
+    } else if (b.phase === 'build' && c.move === 'offer') {
+      const list = (many: unknown, one: unknown) => (Array.isArray(many) ? many : [one]);
+      const gives = list(c.giveCards, c.give),
+        wants = list(c.wantCards, c.want);
+      if (!gives.length || !wants.length || ![...gives, ...wants].every(isResource))
+        return reject('Choose cards to give and to get.');
+      const give = toHand(gives as Resource[]),
+        want = toHand(wants as Resource[]);
+      if (resources.some((r) => give[r] && want[r])) return reject('Trade different resources.');
+      if (handSize(want) > bankSize) return reject('That is too many cards.');
+      if (!covers(hand, give)) return reject('You need more cards for that trade.');
+      b.offer = { give, want };
+      b.event = name + ' offered a trade.';
     } else if (c.move === 'cancel' && b.offer) {
       b.offer = null;
       b.event = name + ' withdrew the trade.';
