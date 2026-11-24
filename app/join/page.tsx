@@ -5,6 +5,7 @@ import {funnyName} from '@/lib/controller/names';
 import {IslandPhone} from '@/components/IslandGame';
 import {PyramidPhone} from '@/components/PyramidGame';
 import {KingsPhone} from '@/components/KingsGame';
+import {StormPhone} from '@/components/StormGame';
 import {QuizPhone} from '@/components/QuizGame';
 import {PodiumPhone} from '@/components/Podium';
 import {CheerBar} from '@/components/Cheers';
@@ -41,6 +42,7 @@ export default function Controller(){
  {room.phase==='lobby'?<><h2>{me?.ready?'You’re ready!':'Ready to play?'}</h2><p>{games[room.game].instructions}</p><button className="pt-primary" disabled={busy} onClick={()=>command({action:'ready',ready:!me?.ready})}>{me?.ready?'Cancel ready':'I’m ready'}</button><p>{room.players.filter(p=>p.ready).length} of {room.players.length} ready</p></>
  :room.phase==='paused'?<h2>Game paused</h2>:room.phase==='results'?<>{drinking(room.game)?<><h2>Final rankings</h2><Ranks room={room}/></>:<PodiumPhone room={room} id={seat.id!}><Ranks room={room}/></PodiumPhone>}<p>Stay connected for the next match.</p></>
  :room.phase==='ended'?<><h2>Session ended</h2><button className="pt-primary" onClick={forget}>Join another room</button></>
+ :room.storm?<StormPhone key={room.storm.seq} room={room} board={room.storm} id={seat.id!} now={now} command={command} busy={busy}/>
  :room.game==='pyramid'&&room.pyramid?<PyramidPhone key={room.pyramid.index} room={room} board={room.pyramid} id={seat.id!} command={command} busy={busy}/>
  :room.game==='kings'&&room.kings?<KingsPhone room={room} board={room.kings} id={seat.id!} command={command} busy={busy}/>
  :room.game==='settlers'&&room.island?<IslandPhone key={room.island.phase==='discard'?'discard-'+room.island.rolledAt:room.island.revision} room={room} id={seat.id!} command={command} busy={busy}/>:room.quiz?<QuizPhone room={room} quiz={room.quiz} now={now} id={seat.id!} command={command} busy={busy}/>

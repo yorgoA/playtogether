@@ -16,6 +16,17 @@ import {
   settleRace,
   type Kings,
 } from './kings';
+import {
+  leaveStorm,
+  newStorm,
+  stormMove,
+  stormOver,
+  stormScore,
+  stormTimeout,
+  stormView,
+  turnMs,
+  type Storm,
+} from './storm';
 import { bankLeft, islandMove, startIsland, totalPoints } from './island';
 import { active, goal, handSize, pointsFor, resources, type Island } from '../island/board';
 import { botMove } from './island-bot';
@@ -55,6 +66,7 @@ export type Room = {
   island?: Island;
   pyramid?: Pyramid;
   kings?: Kings;
+  storm?: Storm;
   revealing?: boolean;
   started: number;
   deadline: number;
@@ -129,7 +141,22 @@ function advanceBots(r: Room, now: number) {
 function drink(r: Room, poured: ReturnType<typeof kingsMove>) {
   for (const p of r.players) if (poured?.drinkers.includes(p.id)) p.score -= poured.amount;
 }
+function afterStorm(r: Room, seq: number, now: number) {
+  const s = r.storm!;
+  if (s.seq !== seq) r.deadline = now + turnMs;
+  if (!stormOver(s)) return;
+  r.phase = 'results';
+  r.deadline = 0;
+  for (const p of r.players) p.score = stormScore(s, p.id);
+}
 function advance(r: Room, now: number) {
+  if (r.phase === 'playing' && r.storm) {
+    if (now < r.deadline) return false;
+    const { seq } = r.storm;
+    stormTimeout(r.storm);
+    afterStorm(r, seq, now);
+    return true;
+  }
   if (r.phase === 'playing' && r.kings) {
     const poured = settleRace(r.kings, now);
     drink(r, poured);
@@ -159,6 +186,7 @@ function lobby(r: Room) {
   delete r.island;
   delete r.pyramid;
   delete r.kings;
+  delete r.storm;
   r.players.forEach((p) => {
     p.answered = false;
     p.reactionMs = undefined;
@@ -200,6 +228,12 @@ function removePlayer(r: Room, p: Player, now: number) {
   }
   // While paused, the deadline moves forward on resume.
   const at = r.phase === 'paused' ? r.pausedAt : now;
+  if (r.storm) {
+    const { turn } = r.storm;
+    leaveStorm(r.storm, p.id);
+    afterStorm(r, turn === p.id ? -1 : r.storm.seq, at);
+    return;
+  }
   if (r.duel) {
     leaveDuel(r, p.id, at);
     if (r.players.length < 2) r.phase = 'results';
@@ -221,6 +255,10 @@ function start(r: Room, now: number, questions: Question[]) {
   if (r.game === 'kings') {
     r.kings = newKings(r.players.map((p) => p.id));
     return;
+  }
+  if (r.game === 'storm') {
+    r.storm = newStorm(r.players.map((p) => p.id));
+    r.deadline = now + turnMs;
   }
   if (r.game === 'quiz') startQuiz(r, questions, now);
   if (r.game === 'reaction') startDuel(r, now);
@@ -345,7 +383,13 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
     );
     drink(r, poured);
     if (kingsOver(r.kings)) r.phase = 'results';
+  } else if (action === 'storm' && player) {
+    if (!r.storm || r.phase !== 'playing') throw new GameError('Storm Deck is not active.', 409);
+    const { seq } = r.storm;
+    stormMove(r.storm, player.id, command);
+    afterStorm(r, seq, now);
   } else if (action === 'input' && player) {
+    if (r.game === 'storm') throw new GameError('Use the Storm Deck controls.');
     if (r.game === 'settlers') throw new GameError('Use the island controls.');
     if (r.game === 'pyramid') throw new GameError('Use the Pyramid controls.');
     if (r.game === 'kings') throw new GameError('Use the Kings Cup controls.');
@@ -507,6 +551,7 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
     island,
     pyramid: r.pyramid ? pyramidView(r.pyramid, viewer?.id) : undefined,
     kings: r.kings ? kingsView(r.kings) : undefined,
+    storm: r.storm ? stormView(r.storm, viewer?.id) : undefined,
     quiz: quiz?.view,
     duel: r.duel ? duelView(r.duel) : undefined,
     code: r.code,

@@ -12,7 +12,7 @@ const categories = [
 ];
 const night='After hours';
 function Meta({g}:{g:Game}){return <div className="meta"><span><Users/>{g.players} players</span><i/><span><Timer/>{g.duration}</span></div>}
-function Cover({g}:{g:Game}){let words=g.name.split(' ');return <div className={'cover '+g.art} style={{backgroundImage:'url(/art/'+g.art+(g.group===night?'.svg)':'.webp)')}}><span className="coverLogo">{words[0]}<br/>{words[1]}</span></div>}
+function Cover({g}:{g:Game}){let words=g.name.split(' ');return <div className={'cover '+g.art} style={{backgroundImage:'url(/art/'+g.art+(g.group===night||g.art==='storm'?'.svg)':'.webp)')}}><span className="coverLogo">{words[0]}<br/>{words[1]}</span></div>}
 export default function Home(){
  const [view,setView]=useState('Home'),[index,setIndex]=useState(0),[detail,setDetail]=useState<Game|null>(null),[help,setHelp]=useState(false),[playing,setPlaying]=useState(''),[recent,setRecent]=useState<string[]>([]),[resume,setResume]=useState('');const modal=useRef<HTMLDialogElement>(null);
  const [profileOpen,setProfileOpen]=useState(false),[viewer,setViewer]=useState<Viewer|null>(null),[favorites,setFavorites]=useState<string[]>([]),[query,setQuery]=useState(''),[paused,setPaused]=useState(false),[heroFocus,setHeroFocus]=useState(false);
