@@ -8,23 +8,30 @@ The shared screen shows the island, settlements, roads, ports, dice, and constru
 
 ## Run locally
 
-Use Node.js 22.13 or later. From the repository root, run:
+Install Node.js 24 LTS and Git. Clone the private repository using your GitHub account, then run:
 
 ```sh
-npm run install:ci
+git clone https://github.com/yorgoA/playtogether.git
+cd playtogether
+npm ci
+npm run db:local
 npm run dev
 ```
 
-Open the address printed by the server. To try the controller on the same computer, open the join link in a separate browser profile. A phone needs a reachable host address. Use the private hosted site for a multi-device session when developing on loopback.
+Open the local URL printed in the terminal. The game runs on your computer without an OpenAI API key, a Claude API key, or a hosting account. Room data stays in the local database.
 
-## Working on the game
+### Play with phones on Wi-Fi
 
-| Path | Purpose |
+Stop the development server with Ctrl+C, then run `npm run dev:lan`. Open the **Network** URL printed by Vite on the host screen before creating the room. The QR code uses that address, so phones on the same Wi-Fi can join. If prompted, allow incoming connections on your private network. Use touch controls on local HTTP. Motion controls may require HTTPS on your phone.
+
+## Working together
+
+| Area | Where to work |
 | --- | --- |
-| `app/` | Host page, phone join page, and API routes |
-| `lib/island/` | Island Settlers rules and game logic |
-| `lib/controller/` | Phone controller logic |
-| `lib/arcade/` | Arcade game logic |
-| `public/art/` | Game artwork |
+| Shared screen and phone UI | `components/`, `app/page.tsx`, `app/join/`, and `public/art/` |
+| Room API and persistence | `app/api/rooms/`, `lib/server/`, `db/`, and `drizzle/` |
+| Game logic shared across screens | `lib/island/`, `lib/controller/`, and `lib/arcade/` |
 
-Run `npm run lint` to check the source and `npm run build` to generate the production bundle. Run `npm start` to preview that build locally. See the [runtime guide](docs/runtime.md) for database setup, local authentication, preview profiles, and Sites publishing.
+Use separate Git branches for design and backend work. Coordinate changes to room actions and response fields because both screens consume the same API.
+
+See the [runtime guide](docs/runtime.md) for local builds and database details.
