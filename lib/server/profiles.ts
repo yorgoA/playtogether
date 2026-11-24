@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { readText } from './body';
 
 type Profile = { id: string; name: string; birthday: string; avatar: string };
 const cookie = 'pt_profile';
@@ -65,13 +66,9 @@ export function sameHash(a: string, b: string) {
   return diff === 0;
 }
 
-// Reads at most `limit` characters, so nobody can make the server buffer a huge body.
-export async function readJson(
-  req: Request,
-  limit = 2500,
-): Promise<Record<string, unknown> | 'tooLarge' | null> {
-  const raw = await req.text();
-  if (raw.length > limit) return 'tooLarge';
+export async function readJson(req: Request): Promise<Record<string, unknown> | 'tooLarge' | null> {
+  const raw = await readText(req);
+  if (raw === null) return 'tooLarge';
   try {
     const value = JSON.parse(raw);
     return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
@@ -100,7 +97,7 @@ export async function hit(key: string, limit: number, windowMs: number) {
      ON CONFLICT(key) DO UPDATE SET
        count = CASE WHEN reset_at <= ? THEN 1 ELSE count + 1 END,
        reset_at = CASE WHEN reset_at <= ? THEN ? ELSE reset_at END
-     RETURNING count, reset_at`,
+     RETURNING count, reset_at AS resetAt`,
   )
     .bind(key, now + windowMs, now, now, now + windowMs)
     .first<Limit>();

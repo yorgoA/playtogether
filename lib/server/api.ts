@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { CreateRoomRequest, RoomCommand } from '../contract';
+import { readText } from './body';
 import { GameError } from './games';
 import { mutate, newRoom, snapshot, type Room } from './session';
 
@@ -10,8 +11,8 @@ function db() {
 }
 async function body(req: Request): Promise<Record<string, unknown>> {
   if (!req.headers.get('content-type')?.includes('application/json')) throw new GameError('Send JSON.', 415);
-  const raw = await req.text();
-  if (raw.length > 2500) throw new GameError('Request too large.', 413);
+  const raw = await readText(req);
+  if (raw === null) throw new GameError('Request too large.', 413);
   try {
     const obj = JSON.parse(raw);
     if (obj && !Array.isArray(obj) && typeof obj === 'object') return obj;

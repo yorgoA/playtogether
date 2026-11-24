@@ -31,8 +31,8 @@ const avatars = ['🦊', '🐼', '🐙', '🦉'];
 const wrongPasswords = 5;
 const perAddress = 30;
 const window = 15 * minute;
-// New profiles from one address in an hour.
-const registrations = 5;
+// New profiles from one address in an hour. Everyone on one Wi-Fi shares an address.
+const registrations = 20;
 
 const tooMany = (seconds: number) =>
   reply({ error: 'Too many attempts. Try again later.' }, 429, {
