@@ -36,6 +36,10 @@ const playerCommands = [
     slot: z.number().int().min(0).max(51).optional(),
     target: z.string().max(60).optional(),
     text: z.string().max(60).optional(),
+    // Race taps: how long after this phone showed the race the player tapped.
+    ms: z.number().min(0).optional(),
+    // Catches: made up for one press and sent again with it, so a repeat does not count twice.
+    press: z.string().min(8).max(64).optional(),
   }),
   z.object({
     action: z.literal('pyramidClaim'),

@@ -18,7 +18,17 @@ export type Kings = {
   rules: { by: string; text: string }[];
   kings: number;
   event: KingsView['event'];
+  // A race is decided by how fast each player tapped on their own phone, not by whose message came first.
+  raceAt?: number;
+  raceUntil?: number;
+  times?: Record<string, number>;
+  // Presses already counted.
+  presses?: string[];
 };
+// How long the last phone may take after everyone else has tapped.
+export const raceGraceMs = 3000;
+// How much of a tap's delay we accept as a late start on that phone.
+const raceAllowanceMs = 3000;
 type Pour = { drinkers: string[]; amount: number } | null;
 
 export function newKings(players: string[]): Kings {
@@ -58,14 +68,14 @@ function pour(board: Kings, ids: string[], amount: number, caught = false): Pour
   return { drinkers: [...drinkers], amount };
 }
 
-function draw(board: Kings, player: string, slot: unknown, connected: string[]): Pour {
+function draw(board: Kings, player: string, slot: unknown, connected: string[], now: number): Pour {
   if (typeof slot !== 'number' || !board.left[slot]) throw new GameError('That card is already gone.');
   board.left[slot] = false;
   board.slot = slot;
   board.card = board.deck[slot];
   board.seq++;
   board.tapped = [];
-  board.racers = [];
+  clearRace(board);
   board.event = null;
   board.phase = 'open';
   switch (board.card[0]) {
@@ -82,7 +92,10 @@ function draw(board: Kings, player: string, slot: unknown, connected: string[]):
     case '4':
     case '7':
       board.racers = connected;
-      if (connected.length > 1) board.phase = 'race';
+      if (connected.length > 1) {
+        board.phase = 'race';
+        board.raceAt = now;
+      }
       return null;
     case 'Q':
       board.master = player;
@@ -103,8 +116,10 @@ export function kingsMove(
   player: string,
   command: Record<string, unknown>,
   connected: string[],
+  now: number,
 ): Pour {
-  const { move, target, text } = command;
+  const { move, target, text, press } = command;
+  if (move === 'catch' && typeof press === 'string' && board.presses?.includes(press)) return null;
   if (command.seq !== board.seq) throw new GameError('The table has moved on.', 409);
   const mine = board.order[board.turn] === player;
   const other = () => {
@@ -114,14 +129,21 @@ export function kingsMove(
   };
   if (move === 'catch') {
     if (board.master !== player) throw new GameError('Only the question master can catch players.');
-    return pour(board, [other()], 1, true);
+    const caught = other();
+    if (typeof press === 'string') board.presses = [...(board.presses ?? []), press].slice(-30);
+    return pour(board, [caught], 1, true);
   }
   if (move === 'tap' && board.phase === 'race' && board.racers.includes(player)) {
-    if (!board.tapped.includes(player)) board.tapped.push(player);
-    const rest = board.racers.filter((id) => !board.tapped.includes(id));
-    if (rest.length > 1) return null;
-    board.phase = 'open';
-    return pour(board, rest, 1);
+    if (board.tapped.includes(player)) return null;
+    const elapsed = now - (board.raceAt ?? now);
+    const reported = typeof command.ms === 'number' && Number.isFinite(command.ms) ? command.ms : elapsed;
+    const ms = Math.min(elapsed, Math.max(reported, elapsed - raceAllowanceMs));
+    board.times = { ...board.times, [player]: ms };
+    board.tapped.push(player);
+    const rest = board.racers.length - board.tapped.length;
+    if (rest === 0) return finishRace(board);
+    if (rest === 1) board.raceUntil ??= now + raceGraceMs;
+    return null;
   }
   if (move === 'drank' && board.phase === 'honor') {
     if (board.tapped.includes(player)) return null;
@@ -132,7 +154,7 @@ export function kingsMove(
     return { drinkers, amount: 1 };
   }
   if (!mine) throw new GameError('It is not your turn.', 409);
-  if (move === 'draw' && board.phase === 'draw') return draw(board, player, command.slot, connected);
+  if (move === 'draw' && board.phase === 'draw') return draw(board, player, command.slot, connected, now);
   if (move === 'pick' && board.phase === 'pick') {
     // The player who drew can also be the one who failed a rhyme or category.
     const self = target === player && (board.card![0] === '9' || board.card![0] === 'T');
@@ -156,6 +178,28 @@ export function kingsMove(
   throw new GameError('That move is not available now.', 409);
 }
 
+function clearRace(board: Kings) {
+  board.racers = [];
+  board.raceAt = board.raceUntil = board.times = undefined;
+}
+// Whoever never tapped drinks; when everyone did, the slowest does.
+function finishRace(board: Kings): Pour {
+  const missing = board.racers.filter((id) => !board.tapped.includes(id));
+  const slowest = Math.max(...board.tapped.map((id) => board.times?.[id] ?? 0));
+  const losers = missing.length ? missing : board.tapped.filter((id) => (board.times?.[id] ?? 0) === slowest);
+  board.phase = 'open';
+  return pour(board, losers, 1);
+}
+// Ends a race whose last player ran out of time.
+export function settleRace(board: Kings, now: number): Pour {
+  if (board.phase !== 'race' || board.raceUntil === undefined || now < board.raceUntil) return null;
+  return finishRace(board);
+}
+export function resumeKings(board: Kings, delta: number) {
+  if (board.raceAt !== undefined) board.raceAt += delta;
+  if (board.raceUntil !== undefined) board.raceUntil += delta;
+}
+
 // Once the fourth king has been drunk the game is over.
 export const kingsOver = (board: Kings) => board.kings === 4 && board.phase === 'draw';
 
@@ -168,7 +212,7 @@ function clearCard(board: Kings) {
   board.phase = 'draw';
   board.card = null;
   board.slot = -1;
-  board.racers = [];
+  clearRace(board);
   board.tapped = [];
 }
 
@@ -188,6 +232,7 @@ export function leaveKings(board: Kings, player: string) {
   if (current) clearCard(board);
   else if (board.phase === 'race' && board.racers.filter((id) => !board.tapped.includes(id)).length < 2)
     board.phase = 'open';
+  if (board.phase !== 'race') board.raceUntil = undefined;
 }
 
 export function kingsView(board: Kings): KingsView {

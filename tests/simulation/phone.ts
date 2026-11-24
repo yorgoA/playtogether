@@ -1,5 +1,5 @@
 import type { RoomSnapshot } from '../../lib/contract';
-import { RoomResponse } from '../../lib/contract';
+import { adultGames, RoomResponse } from '../../lib/contract';
 import type { World } from './world';
 
 export type Link = { oneWay: number; jitter: number; loss: number };
@@ -36,6 +36,8 @@ export class Phone {
   shown = new Map<number, number>();
   // How long before the signal the phone learned of it.
   leads = new Map<number, number>();
+  // Called with everything this device is ever shown.
+  watch: (room: RoomSnapshot, phone: Phone) => void = () => {};
   private stopped = false;
   private busy = false;
   private rtt = Infinity;
@@ -87,6 +89,7 @@ export class Phone {
     return reply;
   }
   private accept(room: RoomSnapshot, sentAt: number) {
+    this.watch(room, this);
     const arrived = this.deviceNow();
     const trip = arrived - sentAt;
     this.rtt += 1;
@@ -173,12 +176,35 @@ export class Phone {
   }
 }
 
-// A host screen and its phones, all polling.
-export async function openTable(world: World, game: string, phoneLinks: Link[], rounds = 3) {
-  const stats = newStats();
-  const made = await world.server('/api/rooms', {
+// Drinking games need the host to be signed in with an 18+ profile.
+async function adultCookie(world: World) {
+  const response = await world.server('/api/profile', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      action: 'register',
+      name: 'Sim ' + Math.floor(world.now() + world.random() * 1e9).toString(36),
+      password: 'only for simulations',
+      birthday: '1990-01-01',
+    }),
+  });
+  const cookie = response.headers.get('set-cookie');
+  if (!cookie) throw new Error('Could not sign in: ' + (await response.text()));
+  return cookie.split(';')[0];
+}
+// A host screen and its phones, all polling.
+export async function openTable(
+  world: World,
+  game: string,
+  phoneLinks: Link[],
+  rounds = 3,
+  watch: Phone['watch'] = () => {},
+) {
+  const stats = newStats();
+  const cookie = adultGames.includes(game) ? await adultCookie(world) : '';
+  const made = await world.server('/api/rooms', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
     body: JSON.stringify({ game, rounds }),
   });
   const { code, hostToken } = (await made.json()) as { code: string; hostToken: string };
@@ -187,6 +213,7 @@ export async function openTable(world: World, game: string, phoneLinks: Link[], 
   const phones = phoneLinks.map(
     (link, i) => new Phone(world, code, link, stats, Math.round((world.random() - 0.5) * 600_000) * (i % 2)),
   );
+  for (const device of [host, ...phones]) device.watch = watch;
   const loops: Promise<void>[] = [host.poll()];
   await Promise.all(
     phones.map(async (phone, i) => {
