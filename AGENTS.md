@@ -32,6 +32,7 @@ Run `npm run check`: lint, formatting, types, tests and build. `npm run format` 
 
 - Backend lint errors fail. Screens have existing lint warnings; do not add more.
 - A change to game rules, permissions or scoring comes with a test in `tests/`.
+- `tests/simulation/` plays full rooms on slow, lossy and dropped connections. Its phones copy the polling and clock rules of `lib/controller/room.ts`; keep them in step. `it.fails` marks a known problem: when a fix makes one fail, turn it into `it`. `PLAYTOGETHER_URL=http://localhost:5173 npm run test:live` plays the same matches against a running server.
 
 ## Database
 
