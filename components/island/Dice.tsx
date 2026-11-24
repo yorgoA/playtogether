@@ -19,7 +19,7 @@ function Die({value,rolling,coral}:{value:number,rolling:boolean,coral?:boolean}
  </span></span>;
 }
 export default function Dice({room}:{room:Room}){
- const b=room.island!,rolling=useRolling(room),waiting=b.phase==='roll';
+ const b=room.island!,rolling=useRolling(room),waiting=['roll','settlement','road'].includes(b.phase);
  if(!b.dice.length)return null;
  const sum=b.dice[0]+b.dice[1];
  return <div className={'isl-dice'+(waiting?' waiting':'')} role="status" aria-label={rolling?'Dice rolling':(waiting?'Last roll: ':'Rolled ')+sum}>

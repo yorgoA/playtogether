@@ -134,9 +134,9 @@ function scenery(resource:Resource|'sand',rnd:()=>number):Part[]{
  }
  return out;
 }
-export function sceneryGeometry(){
+export function sceneryGeometry(land:typeof tiles){
  const parts:Part[]=[];
- tiles.forEach((t,i)=>{for(const p of scenery(t.resource,seeded(i+3)))parts.push(p.translate(t.x*S,0,t.y*S))});
+ land.forEach((t,i)=>{for(const p of scenery(t.resource,seeded(i+3)))parts.push(p.translate(t.x*S,0,t.y*S))});
  // Dress the beach with palms, rocks and parasols, away from the piers.
  const rnd=seeded(91),piers=ports.map(p=>({x:(vertices[p.a].x+vertices[p.b].x)/2*S,z:(vertices[p.a].y+vertices[p.b].y)/2*S}));
  for(let i=0;i<46;i++){

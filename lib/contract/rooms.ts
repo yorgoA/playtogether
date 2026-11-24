@@ -11,7 +11,7 @@ const Game = z.enum(gameIds);
 const Resource = z.enum(resources);
 const Piece = z.enum(pieces);
 const Phase = z.enum(['lobby', 'playing', 'paused', 'results', 'ended']);
-const IslandPhase = z.enum(['settlement', 'road', 'roll', 'harvest', 'discard', 'robber', 'steal', 'build']);
+const IslandPhase = z.enum(['order', 'settlement', 'road', 'roll', 'harvest', 'discard', 'robber', 'steal', 'build']);
 // All five resources are always present, as zero when the player has none.
 const Hand = z
   .object({ timber: z.number(), clay: z.number(), grain: z.number(), wool: z.number(), ore: z.number() })
@@ -128,6 +128,15 @@ const Spot = z.object({ at: z.number(), lane: z.number() }).strict();
 // `handSizes` counts everyone's cards without saying which they are.
 const Island = z
   .object({
+    layout: z
+      .object({
+        terrain: z.array(z.union([Resource, z.literal('sand')])),
+        numbers: z.array(z.number()),
+        ports: z.array(z.union([Resource, z.literal('any')])),
+      })
+      .strict()
+      .optional(),
+    orderRolls: z.record(z.string(), z.array(z.number())).optional(),
     robber: z.number().optional(),
     owed: z.record(z.string(), z.number()).optional(),
     victims: z.array(z.string()).optional(),

@@ -2,7 +2,7 @@
 import {useEffect,useLayoutEffect,useMemo,useRef} from 'react';
 import {Canvas,useFrame,useThree} from '@react-three/fiber';
 import * as THREE from 'three';
-import {edges,ports,robberTile,tiles,vertices,type BoardView,type Resource} from '@/lib/island/board';
+import {edges,portsOf,robberTile,tiles,tilesOf,vertices,type BoardView,type Resource} from '@/lib/island/board';
 import type {Player} from '@/lib/controller/room';
 import {at,beachGeometry,boatGeometry,GROUND,houseGeometry,pierGeometry,roundedHex,S,sceneryGeometry,tileColors,TILE_TOP} from './geometry';
 import {drawResource} from './icons';
@@ -65,17 +65,18 @@ function tokenTexture(n:number){
 function Tokens({board}:{board:BoardView}){
  const faces=useMemo(()=>new Map([...new Set(tiles.map(t=>t.number))].filter(Boolean).map(n=>[n,tokenTexture(n)])),[]);
  const blocked=robberTile(board);
- return <>{tiles.map((t,i)=>!!t.number&&<group key={i} position={[t.x*S,TILE_TOP,t.y*S]} rotation-x={.16}>
+ return <>{tilesOf(board).map((t,i)=>!!t.number&&<group key={i} position={[t.x*S,TILE_TOP,t.y*S]} rotation-x={.16}>
   <mesh position-y={.035} castShadow><cylinderGeometry args={[.285,.3,.07,36]}/><meshStandardMaterial color={blocked===i?'#5b6266':'#b98a55'}/></mesh>
   <mesh position-y={.074} rotation-x={-Math.PI/2}><circleGeometry args={[.272,40]}/><meshBasicMaterial map={faces.get(t.number)} color={blocked===i?'#8a9092':'#ffffff'} toneMapped={false}/></mesh>
  </group>)}</>;
 }
-function Ground(){
- const geo=useMemo(()=>({beach:beachGeometry(),scenery:sceneryGeometry(),piers:pierGeometry(),tile:new THREE.ExtrudeGeometry(roundedHex(.845),{depth:TILE_TOP-GROUND+.02,bevelEnabled:true,bevelSize:.035,bevelThickness:.025,bevelSegments:3,curveSegments:5}).rotateX(-Math.PI/2).translate(0,GROUND-.045,0)}),[]);
+function Ground({board}:{board:BoardView}){
+ const land=tilesOf(board);
+ const geo=useMemo(()=>({beach:beachGeometry(),scenery:sceneryGeometry(land),piers:pierGeometry(),tile:new THREE.ExtrudeGeometry(roundedHex(.845),{depth:TILE_TOP-GROUND+.02,bevelEnabled:true,bevelSize:.035,bevelThickness:.025,bevelSegments:3,curveSegments:5}).rotateX(-Math.PI/2).translate(0,GROUND-.045,0)}),[land]);
  useEffect(()=>()=>Object.values(geo).forEach(g=>g.dispose()),[geo]);
  return <>
   <mesh geometry={geo.beach} receiveShadow><meshStandardMaterial vertexColors roughness={1}/></mesh>
-  {tiles.map((t,i)=><mesh key={i} geometry={geo.tile} position={[t.x*S,0,t.y*S]} receiveShadow castShadow><meshStandardMaterial color={tileColors[t.resource]} roughness={.95}/></mesh>)}
+  {land.map((t,i)=><mesh key={i} geometry={geo.tile} position={[t.x*S,0,t.y*S]} receiveShadow castShadow><meshStandardMaterial color={tileColors[t.resource]} roughness={.95}/></mesh>)}
   <mesh geometry={geo.scenery} castShadow receiveShadow><meshStandardMaterial vertexColors flatShading roughness={.9}/></mesh>
   <mesh geometry={geo.piers} castShadow receiveShadow><meshStandardMaterial vertexColors roughness={1}/></mesh>
  </>;
@@ -91,8 +92,10 @@ function sailTexture(kind:Resource|'any'){
   else{c.fillStyle='#bfe0e4';c.beginPath();c.roundRect(38,132,180,128,26);c.fill();drawResource(c,kind,128,196,124)}
  });
 }
-function Boats(){
- const hull=useMemo(()=>boatGeometry(),[]),sails=useMemo(()=>ports.map(p=>sailTexture(p.kind)),[]);
+function Boats({board}:{board:BoardView}){
+ const ports=portsOf(board);
+ const hull=useMemo(()=>boatGeometry(),[]),sails=useMemo(()=>ports.map(p=>sailTexture(p.kind)),[ports]);
+ useEffect(()=>()=>sails.forEach(t=>t.dispose()),[sails]);
  const group=useRef<THREE.Group>(null);
  useFrame(s=>{group.current?.children.forEach((boat,i)=>{const t=s.clock.elapsedTime*1.1+i*1.7;boat.position.y=.01+Math.sin(t)*.022;boat.rotation.z=Math.sin(t*.8)*.035})});
  return <group ref={group}>{ports.map((p,i)=>{
@@ -135,7 +138,7 @@ function Pieces({board,players}:{board:BoardView,players:Player[]}){
 }
 /* The robber is a raider camp pitched on the tile it blocks. */
 function Raider({board}:{board:BoardView}){
- const t=tiles[robberTile(board)],ref=useRef<THREE.Group>(null);
+ const t=tilesOf(board)[robberTile(board)],ref=useRef<THREE.Group>(null);
  const target=useMemo(()=>new THREE.Vector3(t.x*S,TILE_TOP,t.y*S+(t.number?-.4:-.02)),[t]);
  useFrame((_,dt)=>{
   if(!ref.current)return;
@@ -154,13 +157,13 @@ function Glow({board,settled}:{board:BoardView,settled:boolean}){
  const group=useRef<THREE.Group>(null);
  useFrame(s=>{const o=still()?.9:.7+Math.sin(s.clock.elapsedTime*4)*.3;group.current?.children.forEach(m=>{((m as THREE.Mesh).material as THREE.Material).opacity=o})});
  const sum=board.dice.length?board.dice[0]+board.dice[1]:0;
- if(!settled||!sum||sum===7||board.phase==='roll')return null;
- return <group ref={group}>{tiles.map((t,i)=>t.number===sum&&i!==robberTile(board)&&<mesh key={i} geometry={ring} position={[t.x*S,TILE_TOP+.012,t.y*S]}><meshBasicMaterial color="#fff27a" transparent toneMapped={false} depthWrite={false}/></mesh>)}</group>;
+ if(!settled||!sum||sum===7||['roll','order','settlement','road'].includes(board.phase))return null;
+ return <group ref={group}>{tilesOf(board).map((t,i)=>t.number===sum&&i!==robberTile(board)&&<mesh key={i} geometry={ring} position={[t.x*S,TILE_TOP+.012,t.y*S]}><meshBasicMaterial color="#fff27a" transparent toneMapped={false} depthWrite={false}/></mesh>)}</group>;
 }
 /* Shadows are redrawn only while something moves, which keeps TV browsers smooth. */
-function Sun({revision}:{revision:number}){
+function Sun({scene}:{scene:string}){
  const light=useRef<THREE.DirectionalLight>(null),until=useRef(0);
- useEffect(()=>{until.current=performance.now()+2500},[revision]);
+ useEffect(()=>{until.current=performance.now()+2500},[scene]);
  useFrame(()=>{const shadow=light.current?.shadow;if(shadow){shadow.autoUpdate=false;shadow.needsUpdate=performance.now()<until.current}});
  return <directionalLight ref={light} position={[-5,9,3.5]} intensity={2.1} color="#fff0d2" castShadow shadow-mapSize={[2048,2048]} shadow-camera-left={-6.5} shadow-camera-right={6.5} shadow-camera-top={6.5} shadow-camera-bottom={-6.5} shadow-bias={-.0006} shadow-normalBias={.02}/>;
 }
@@ -168,7 +171,7 @@ export default function IslandScene({board,players,settled,onFail}:{board:BoardV
  return <Canvas shadows={{type:THREE.PCFShadowMap}} dpr={[1,1.75]} camera={{fov:26,near:1,far:80}} gl={{antialias:true,powerPreference:'high-performance',toneMapping:THREE.NoToneMapping}} onCreated={({gl})=>gl.domElement.addEventListener('webglcontextlost',()=>{if(gl.domElement.isConnected)onFail()})} aria-label="Island board" role="img">
   <color attach="background" args={['#0f6f9e']}/>
   <hemisphereLight args={['#eaf6ff','#c9a36a',1.35]}/>
-  <FitCamera/><Sun revision={board.revision}/>
-  <Water/><Ground/><Boats/><Tokens board={board}/><Glow board={board} settled={settled}/><Pieces board={board} players={players}/><Raider board={board}/>
+  <FitCamera/><Sun scene={board.revision+':'+board.layout?.terrain.join()}/>
+  <Water/><Ground board={board}/><Boats board={board}/><Tokens board={board}/><Glow board={board} settled={settled}/><Pieces board={board} players={players}/><Raider board={board}/>
  </Canvas>;
 }

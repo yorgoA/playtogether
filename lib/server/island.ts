@@ -7,7 +7,9 @@ import {
   emptyHand,
   locations,
   resources,
-  tiles,
+  orderRollers,
+  shuffledLayout,
+  tilesOf,
   type Island,
   type Resource,
   type Piece,
@@ -27,6 +29,16 @@ export function newIsland(order: string[]): Island {
     event: 'Choose the first settlement on your phone.',
     offer: null,
     hands: Object.fromEntries(order.map((id) => [id, emptyHand()])),
+  };
+}
+// A real match: a fresh map, and a roll-off for who goes first.
+export function startIsland(order: string[]): Island {
+  return {
+    ...newIsland(order),
+    layout: shuffledLayout(),
+    phase: 'order',
+    orderRolls: {},
+    event: 'Everyone rolls. The highest roll starts.',
   };
 }
 export function islandMove(b: Island, id: string, name: string, c: Record<string, unknown>) {
@@ -83,16 +95,39 @@ export function islandMove(b: Island, id: string, name: string, c: Record<string
         b.anchor = index;
         b.phase = 'road';
         if (b.setup >= b.order.length)
-          for (const t of tiles) if (t.vs.includes(index) && t.resource !== 'sand') hand[t.resource]++;
+          for (const t of tilesOf(b)) if (t.vs.includes(index) && t.resource !== 'sand') hand[t.resource]++;
       } else if (b.phase === 'road') {
         b.setup++;
         const n = b.order.length;
         b.turn = b.setup < n ? b.setup : Math.max(0, 2 * n - 1 - b.setup);
         b.phase = b.setup === 2 * n ? 'roll' : 'settlement';
       }
+    } else if (c.move === 'roll' && b.phase === 'order') {
+      b.dice = Array.from({ length: 2 }, () => Math.floor(Math.random() * 6) + 1);
+      b.rolledAt = Date.now();
+      const sum = b.dice[0] + b.dice[1],
+        rolls = (b.orderRolls ??= {});
+      (rolls[id] ??= []).push(sum);
+      const waiting = orderRollers(b);
+      b.event = name + ' rolled ' + sum + ' for turn order.';
+      if (waiting.length) {
+        // First rolls come before any re-roll.
+        const next = waiting.find((p) => !rolls[p]) ?? waiting[0];
+        if (rolls[next]) b.event += ' A tie! Those players roll again.';
+        b.turn = b.order.indexOf(next);
+      } else {
+        b.order.sort((x, y) => {
+          const i = rolls[x].findIndex((n, k) => n !== rolls[y][k]);
+          return rolls[y][i] - rolls[x][i];
+        });
+        b.turn = 0;
+        b.phase = 'settlement';
+        b.event += ' The highest roll starts.';
+      }
     } else if (c.move === 'roll' && b.phase === 'roll') {
       b.dice = Array.from({ length: 2 }, () => Math.floor(Math.random() * 6) + 1);
-      const sum = b.dice[0] + b.dice[1];
+      const sum = b.dice[0] + b.dice[1],
+        land = tilesOf(b);
       b.rolledAt = Date.now();
       b.phase = 'build';
       if (sum === 7) {
@@ -103,8 +138,8 @@ export function islandMove(b: Island, id: string, name: string, c: Record<string
         }
         b.phase = Object.keys(b.owed).length ? 'discard' : 'robber';
       }
-      for (const t of tiles)
-        if (t.number === sum && t.resource !== 'sand' && t !== tiles[robberTile(b)])
+      for (const t of land)
+        if (t.number === sum && t.resource !== 'sand' && t !== land[robberTile(b)])
           for (const v of t.vs) {
             const h = b.homes[v];
             if (h) b.hands[h.id][t.resource] += h.city ? 2 : 1;
@@ -113,13 +148,13 @@ export function islandMove(b: Island, id: string, name: string, c: Record<string
         name + ' rolled ' + sum + (sum === 7 ? ' · the robber moves.' : '. Matching land produces supplies.');
     } else if (c.move === 'robber' && b.phase === 'robber') {
       const index = c.index as number;
-      if (!Number.isInteger(index) || !tiles[index] || index === robberTile(b))
+      if (!Number.isInteger(index) || !tilesOf(b)[index] || index === robberTile(b))
         return reject('Choose a different tile.');
       b.robber = index;
       b.victims = [
         ...new Set(
-          tiles[index].vs
-            .map((v) => b.homes[v]?.id)
+          tilesOf(b)
+            [index].vs.map((v) => b.homes[v]?.id)
             .filter((pid) => pid && pid !== id && resources.some((k) => b.hands[pid][k] > 0)),
         ),
       ];
