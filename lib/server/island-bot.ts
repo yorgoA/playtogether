@@ -3,11 +3,15 @@ import {
   robberTile,
   active,
   affordable,
+  affordsDev,
+  devCost,
+  playable,
   costs,
   edges,
   locations,
   resources,
   tilesOf,
+  type DevCard,
   type Island,
   type Piece,
   type Resource,
@@ -66,18 +70,40 @@ export function botMove(board: Island, id: string) {
     return { move: 'robber', index: choices.sort((a, b) => b.value - a.value)[0].index };
   }
   if (phase === 'steal') return { move: 'steal', target: board.victims![0] };
-  if (phase === 'roll' || phase === 'order') return { move: 'roll' };
+  if (board.freeRoads) {
+    const choices = locations(board, id, 'road');
+    return choices.length ? place('road', choices) : { move: 'skipRoads' };
+  }
+  const can = (kind: DevCard) => playable(board, id, board.dev?.[id], kind);
+  if (phase === 'roll' || phase === 'order') {
+    const blocked = tilesOf(board)[robberTile(board)].vs.some((v) => board.homes[v]?.id === id);
+    return phase === 'roll' && blocked && can('knight')
+      ? { move: 'playDev', card: 'knight' }
+      : { move: 'roll' };
+  }
   const options = (['city', 'settlement', 'road'] as Piece[])
     .map((piece) => ({ piece, choices: locations(board, id, piece) }))
     .filter((o) => o.choices.length);
-  for (const { piece, choices } of options)
-    if (phase === 'build' && affordable(hand, piece)) return place(piece, choices);
+  if (phase === 'build') {
+    for (const { piece, choices } of options)
+      if (piece !== 'road' && affordable(hand, piece)) return place(piece, choices);
+    if (can('knight')) return { move: 'playDev', card: 'knight' };
+    if (can('roads')) return { move: 'playDev', card: 'roads' };
+    const low = [...resources].sort((a, b) => hand[a] - hand[b]);
+    if (can('bounty')) return { move: 'playDev', card: 'bounty', cards: low.slice(0, 2) };
+    if (can('monopoly')) return { move: 'playDev', card: 'monopoly', resource: low[0] };
+    if (board.deck?.length && affordsDev(hand)) return { move: 'buyDev' };
+    for (const { piece, choices } of options) if (affordable(hand, piece)) return place(piece, choices);
+  }
   const cost = (piece: Piece, r: Resource) =>
     Number((costs[piece] as Partial<Record<Resource, number>>)[r] ?? 0);
   const missing = (piece: Piece) => resources.reduce((n, r) => n + Math.max(0, cost(piece, r) - hand[r]), 0);
   options.sort((a, b) => missing(a.piece) - missing(b.piece));
-  const goal = options[0]?.piece ?? 'city';
-  const spare = (r: Resource) => hand[r] - cost(goal, r);
+  // With nothing left to build, save for development cards.
+  const aim = options[0]?.piece;
+  const needs = (r: Resource) =>
+    aim ? cost(aim, r) : Number((devCost as Partial<Record<Resource, number>>)[r] ?? 0);
+  const spare = (r: Resource) => hand[r] - needs(r);
   const ranked = [...resources].sort((a, b) => spare(a) - spare(b));
   const want = ranked[0],
     give = ranked[ranked.length - 1];

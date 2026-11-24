@@ -2,13 +2,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   active,
   edges,
+  devCards,
+  devDeck,
   emptyHand,
+  goal,
   limits,
   locations,
+  longestRoadOwner,
   piecesLeft,
   pointsFor,
   ports,
   portsOf,
+  roadLength,
   robberTile,
   shuffledLayout,
   sixesApart,
@@ -16,10 +21,11 @@ import {
   tilesOf,
   tradeRate,
   vertices,
+  type DevCard,
   type Hand,
   type Island,
 } from '../lib/island/board';
-import { islandMove, newIsland, startIsland } from '../lib/server/island';
+import { islandMove, newIsland, startIsland, totalPoints } from '../lib/server/island';
 import { botMove } from '../lib/server/island-bot';
 
 afterEach(() => vi.restoreAllMocks());
@@ -318,6 +324,157 @@ describe('piece limits', () => {
   });
 });
 
+describe('development cards', () => {
+  function turn(kinds: DevCard[], phase: 'roll' | 'build' = 'build') {
+    const b = afterSetup();
+    b.phase = phase;
+    b.deck = [];
+    b.hands = { a: emptyHand(), b: emptyHand() };
+    b.dev = { a: kinds.map((kind) => ({ kind, fresh: false })) };
+    return b;
+  }
+  it('come from a shuffled deck of 25', () => {
+    const { deck } = startIsland(['a', 'b']);
+    for (const kind of devCards) expect(deck!.filter((c) => c === kind)).toHaveLength(devDeck[kind]);
+    expect(deck).toHaveLength(25);
+  });
+  it('cost one wheat, sheep and stone, and wait a turn before being played', () => {
+    const b = turn([]);
+    b.deck = ['knight'];
+    expect(() => move(b, 'a', { move: 'buyDev' })).toThrow('more resources');
+    b.hands.a = cards({ grain: 2, wool: 2, ore: 2 });
+    move(b, 'a', { move: 'buyDev' });
+    expect(b.hands.a).toEqual(cards({ grain: 1, wool: 1, ore: 1 }));
+    expect(() => move(b, 'a', { move: 'buyDev' })).toThrow('no development cards left');
+    expect(() => move(b, 'a', { move: 'playDev', card: 'knight' })).toThrow('cannot play');
+    move(b, 'a', { move: 'end' });
+    expect(() => move(b, 'a', { move: 'playDev', card: 'knight' })).toThrow('Wait for your turn');
+    b.phase = 'build';
+    move(b, 'b', { move: 'end' });
+    move(b, 'a', { move: 'playDev', card: 'knight' });
+    expect(b.phase).toBe('robber');
+  });
+  it('are limited to one a turn, and victory points are never played', () => {
+    const b = turn(['bounty', 'monopoly', 'victory']);
+    expect(() => move(b, 'a', { move: 'playDev', card: 'victory' })).toThrow('cannot play');
+    expect(() => move(b, 'a', { move: 'playDev', card: 'gold' })).toThrow('cannot play');
+    move(b, 'a', { move: 'playDev', card: 'bounty', cards: ['ore', 'ore'] });
+    expect(() => move(b, 'a', { move: 'playDev', card: 'monopoly', resource: 'ore' })).toThrow('cannot play');
+  });
+  it('bounty gives two resources and is not spent on a bad choice', () => {
+    const b = turn(['bounty'], 'roll');
+    expect(() => move(b, 'a', { move: 'playDev', card: 'bounty', cards: ['ore'] })).toThrow('two resources');
+    move(b, 'a', { move: 'playDev', card: 'bounty', cards: ['ore', 'wool'] });
+    expect(b.hands.a).toEqual(cards({ ore: 1, wool: 1 }));
+    expect([b.dev!.a, b.phase]).toEqual([[], 'roll']);
+  });
+  it('monopoly takes one resource from everyone', () => {
+    const b = turn(['monopoly']);
+    b.hands = { a: cards({ ore: 1 }), b: cards({ ore: 3, wool: 2 }) };
+    move(b, 'a', { move: 'playDev', card: 'monopoly', resource: 'ore' });
+    expect(b.hands).toEqual({ a: cards({ ore: 4 }), b: cards({ wool: 2 }) });
+  });
+  it('road building gives two free roads, even before rolling', () => {
+    const b = turn(['roads'], 'roll');
+    move(b, 'a', { move: 'playDev', card: 'roads' });
+    expect(() => move(b, 'a', { move: 'roll' })).toThrow('free roads');
+    const before = piecesLeft(b, 'a').road;
+    for (let i = 0; i < 2; i++)
+      move(b, 'a', { move: 'place', piece: 'road', index: locations(b, 'a', 'road')[0] });
+    expect([before - piecesLeft(b, 'a').road, b.freeRoads, b.phase]).toEqual([2, 0, 'roll']);
+    expect(() =>
+      move(b, 'a', { move: 'place', piece: 'road', index: locations(b, 'a', 'road')[0] }),
+    ).toThrow();
+  });
+  it('a knight before rolling returns to the roll, after stealing too', () => {
+    const b = turn(['knight'], 'roll');
+    b.hands.b = cards({ ore: 1 });
+    const spot = tiles.findIndex(
+      (t, i) =>
+        i !== robberTile(b) &&
+        t.vs.some((v) => b.homes[v]?.id === 'b') &&
+        !t.vs.some((v) => b.homes[v]?.id === 'a'),
+    );
+    move(b, 'a', { move: 'playDev', card: 'knight' });
+    move(b, 'a', { move: 'robber', index: spot });
+    expect(b.phase).toBe('steal');
+    move(b, 'a', { move: 'steal', target: 'b' });
+    expect([b.phase, total(b.hands.a), b.resume]).toEqual(['roll', 1, undefined]);
+  });
+  it('three knights earn the strongest army, and only more knights take it', () => {
+    const b = turn(['knight']);
+    b.knights = { a: 2, b: 3 };
+    b.strongestArmy = 'b';
+    const points = pointsFor(b, 'b');
+    move(b, 'a', { move: 'playDev', card: 'knight' });
+    expect(b.strongestArmy).toBe('b');
+    b.phase = 'build';
+    b.devPlayed = false;
+    b.dev = { a: [{ kind: 'knight', fresh: false }] };
+    move(b, 'a', { move: 'playDev', card: 'knight' });
+    expect([b.strongestArmy, pointsFor(b, 'b')]).toEqual(['a', points - 2]);
+  });
+  it('keep victory points out of the public score', () => {
+    const b = turn(['victory', 'victory']);
+    expect(totalPoints(b, 'a') - pointsFor(b, 'a')).toBe(2);
+  });
+});
+
+describe('longest road', () => {
+  // A path of roads that visits each corner once.
+  function path(length: number) {
+    const grow = (trail: number[], v: number, seen: Set<number>): number[] | null => {
+      if (trail.length === length) return trail;
+      for (const [i, e] of edges.entries()) {
+        const w = e.a === v ? e.b : e.b === v ? e.a : -1;
+        if (w < 0 || seen.has(w)) continue;
+        const found = grow([...trail, i], w, new Set([...seen, w]));
+        if (found) return found;
+      }
+      return null;
+    };
+    return grow([], 0, new Set([0]))!;
+  }
+  it('counts a trail, not branches, and is broken by an opponent', () => {
+    const b = newIsland(['a', 'b']),
+      trail = path(6);
+    for (const i of trail.slice(0, 4)) b.roads[i] = 'a';
+    expect([roadLength(b, 'a'), longestRoadOwner(b)]).toEqual([4, undefined]);
+    for (const i of trail) b.roads[i] = 'a';
+    expect([roadLength(b, 'a'), longestRoadOwner(b)]).toEqual([6, 'a']);
+    const [x, y] = [edges[trail[2]], edges[trail[3]]];
+    const middle = [x.a, x.b].find((v) => v === y.a || v === y.b)!;
+    b.homes[middle] = { id: 'a', city: false };
+    expect(roadLength(b, 'a')).toBe(6);
+    b.homes[middle] = { id: 'b', city: false };
+    expect([roadLength(b, 'a'), longestRoadOwner(b)]).toEqual([3, undefined]);
+  });
+  it('counts a full loop once', () => {
+    const b = newIsland(['a', 'b']),
+      { vs } = tiles[9];
+    edges.forEach((e, i) => {
+      if (vs.includes(e.a) && vs.includes(e.b)) b.roads[i] = 'a';
+    });
+    expect(roadLength(b, 'a')).toBe(6);
+  });
+  it('stays with its holder on a tie and is worth two points', () => {
+    const b = newIsland(['a', 'b']);
+    for (const i of path(5)) b.roads[i] = 'a';
+    b.longestRoad = longestRoadOwner(b);
+    expect([b.longestRoad, pointsFor(b, 'a')]).toEqual(['a', 2]);
+    const { vs } = tiles[18];
+    edges
+      .map((e, i) => ({ e, i }))
+      .filter(({ e }) => vs.includes(e.a) && vs.includes(e.b))
+      .slice(0, 5)
+      .forEach(({ i }) => (b.roads[i] = 'b'));
+    expect(roadLength(b, 'b')).toBe(5);
+    expect(longestRoadOwner(b)).toBe('a');
+    b.longestRoad = undefined;
+    expect(longestRoadOwner(b)).toBeUndefined();
+  });
+});
+
 describe('bots', () => {
   // Fixed seeds keep a failure reproducible.
   function seeded(seed: number) {
@@ -334,7 +491,7 @@ describe('bots', () => {
       const ids = Array.from({ length: count }, (_, i) => 'p' + i),
         b = startIsland(ids);
       let steps = 0;
-      while (!ids.some((id) => pointsFor(b, id) >= 6)) {
+      while (!ids.some((id) => totalPoints(b, id) >= goal)) {
         expect(steps++, 'seed ' + seed).toBeLessThan(5000);
         const id = ids.find((id) => botMove(b, id));
         expect(id, 'nobody can move in ' + b.phase).toBeDefined();

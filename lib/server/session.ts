@@ -12,8 +12,8 @@ import { GameError, games, type Game, type RoundData } from './games';
 
 import { gameIds, type RoomSnapshot } from '../contract';
 import { claimPyramid, flipPyramid, newPyramid, pyramidView, resolvePyramid, type Pyramid } from './pyramid';
-import { islandMove, startIsland } from './island';
-import { handSize, pointsFor, type Island } from '../island/board';
+import { islandMove, startIsland, totalPoints } from './island';
+import { active, goal, handSize, pointsFor, type Island } from '../island/board';
 import { botMove } from './island-bot';
 type Player = {
   bot?: boolean;
@@ -101,8 +101,12 @@ function beginRound(r: Room, now: number) {
 function playIsland(r: Room, p: Player, command: Command, now: number) {
   const board = r.island!;
   islandMove(board, p.id, p.name, command);
-  p.score = pointsFor(board, p.id);
-  if (p.score >= 6) r.phase = 'results';
+  // One move can change several scores, such as taking the longest road from someone.
+  for (const player of r.players) player.score = pointsFor(board, player.id);
+  if (totalPoints(board, active(board)) >= goal) {
+    r.phase = 'results';
+    for (const player of r.players) player.score = totalPoints(board, player.id);
+  }
   r.botAt = now + 1150;
 }
 function advanceBots(r: Room, now: number) {
@@ -459,11 +463,14 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
   const viewer = r.players.find((p) => p.token === token);
   const board = r.island;
   const island = board
-    ? (({ hands, ...publicBoard }) => ({
+    ? (({ hands, deck, dev, ...publicBoard }) => ({
         ...publicBoard,
         hand: viewer ? hands[viewer.id] : undefined,
         // How many cards everyone holds is public; which ones is not.
         handSizes: Object.fromEntries(Object.entries(hands).map(([id, hand]) => [id, handSize(hand)])),
+        devHand: viewer && (dev?.[viewer.id] ?? []),
+        devSizes: Object.fromEntries(Object.keys(hands).map((id) => [id, dev?.[id]?.length ?? 0])),
+        deckLeft: deck?.length ?? 0,
       }))(board)
     : undefined;
   const clock = r.phase === 'paused' ? r.pausedAt : now;

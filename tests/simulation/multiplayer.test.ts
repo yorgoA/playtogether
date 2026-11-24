@@ -108,7 +108,7 @@ describe.each([1, 2, 3])('full rooms on mixed connections (seed %i)', (seed) => 
       await Promise.all(t.phones.map(playIsland));
       await settle(t);
       const { island, players } = stored(w.sqlite);
-      expect(Math.max(...players.map((p: { score: number }) => p.score))).toBeGreaterThanOrEqual(6);
+      expect(Math.max(...players.map((p: { score: number }) => p.score))).toBeGreaterThanOrEqual(10);
       for (const hand of Object.values(island.hands))
         for (const n of Object.values(hand as object)) expect(n).toBeGreaterThanOrEqual(0);
       expect(t.host.room!.island!.hand).toBeUndefined();
