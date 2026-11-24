@@ -48,6 +48,11 @@ describe('permissions and privacy', () => {
     const view = snapshot(island.room, T0, island.seats[0].token);
     expect(view.island).not.toHaveProperty('hands');
     expect(view.island!.hand).toBeDefined();
+    const [me, other] = island.room.players;
+    island.room.island!.hands[me.id].ore = 2;
+    island.room.island!.hands[other.id].wool = 3;
+    for (const token of ['', island.seats[0].token])
+      expect(snapshot(island.room, T0, token).island!.handSizes).toEqual({ [me.id]: 2, [other.id]: 3 });
     expect(snapshot(island.room, T0).island!.hand).toBeUndefined();
     const json = JSON.stringify(view);
     for (const secret of [island.room.hostToken, ...island.seats.map((s) => s.token)])

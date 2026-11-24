@@ -3,7 +3,9 @@ import {
   active,
   edges,
   emptyHand,
+  limits,
   locations,
+  piecesLeft,
   pointsFor,
   ports,
   robberTile,
@@ -192,6 +194,50 @@ describe('trading', () => {
     expect(() => move(b, 'b', { move: 'accept' })).toThrow('both cards');
     move(b, 'a', { move: 'cancel' });
     expect(b.offer).toBeNull();
+  });
+});
+
+describe('piece limits', () => {
+  function rich() {
+    const b = afterSetup();
+    b.phase = 'build';
+    b.homes = {};
+    b.roads = {};
+    b.hands.a = cards({ timber: 9, clay: 9, grain: 9, wool: 9, ore: 9 });
+    return b;
+  }
+  it('stops at fifteen roads', () => {
+    const b = rich();
+    b.homes = { 0: { id: 'a', city: false } };
+    for (let i = 0; i < limits.road - 1; i++) b.roads[locations(b, 'a', 'road')[0]] = 'a';
+    expect(piecesLeft(b, 'a').road).toBe(1);
+    move(b, 'a', { move: 'place', piece: 'road', index: locations(b, 'a', 'road')[0] });
+    expect(piecesLeft(b, 'a').road).toBe(0);
+    const free = edges.findIndex((_, i) => !b.roads[i]);
+    expect(() => move(b, 'a', { move: 'place', piece: 'road', index: free })).toThrow('highlighted');
+  });
+  it('stops at five settlements until one becomes a city', () => {
+    const b = rich();
+    const spots: number[] = [];
+    b.phase = 'settlement';
+    while (spots.length < limits.settlement) {
+      const v = locations(b, 'b', 'settlement')[0];
+      spots.push(v);
+      b.homes[v] = { id: 'a', city: false };
+    }
+    expect(locations(b, 'a', 'settlement')).toEqual([]);
+    expect(locations(b, 'b', 'settlement').length).toBeGreaterThan(0);
+    b.phase = 'build';
+    move(b, 'a', { move: 'place', piece: 'city', index: spots[0] });
+    expect(piecesLeft(b, 'a')).toMatchObject({ settlement: 1, city: limits.city - 1 });
+    b.phase = 'settlement';
+    expect(locations(b, 'a', 'settlement').length).toBeGreaterThan(0);
+  });
+  it('stops at four cities', () => {
+    const b = rich();
+    for (let v = 0; v < limits.city; v++) b.homes[v] = { id: 'a', city: true };
+    b.homes[40] = { id: 'a', city: false };
+    expect(() => move(b, 'a', { move: 'place', piece: 'city', index: 40 })).toThrow('highlighted');
   });
 });
 

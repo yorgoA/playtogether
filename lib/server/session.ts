@@ -12,7 +12,7 @@ import { GameError, games, type Game, type RoundData } from './games';
 
 import type { RoomSnapshot } from '../contract';
 import { islandMove, newIsland } from './island';
-import { pointsFor, type Island } from '../island/board';
+import { handSize, pointsFor, type Island } from '../island/board';
 import { botMove } from './island-bot';
 type Player = {
   bot?: boolean;
@@ -423,9 +423,12 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
   const viewer = r.players.find((p) => p.token === token);
   const board = r.island;
   const island = board
-    ? (({ hands, ...publicBoard }) => ({ ...publicBoard, hand: viewer ? hands[viewer.id] : undefined }))(
-        board,
-      )
+    ? (({ hands, ...publicBoard }) => ({
+        ...publicBoard,
+        hand: viewer ? hands[viewer.id] : undefined,
+        // How many cards everyone holds is public; which ones is not.
+        handSizes: Object.fromEntries(Object.entries(hands).map(([id, hand]) => [id, handSize(hand)])),
+      }))(board)
     : undefined;
   const clock = r.phase === 'paused' ? r.pausedAt : now;
   const signalAt = r.signalAt && clock >= r.signalAt - signalLeadMs ? r.signalAt : null;

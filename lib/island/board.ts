@@ -8,6 +8,7 @@ export const costs = {
   city: { grain: 2, ore: 3 },
 };
 export type Piece = keyof typeof costs;
+export const limits: Record<Piece, number> = { road: 15, settlement: 5, city: 4 };
 export type Point = { x: number; y: number };
 export const vertices: Point[] = [],
   edges: { a: number; b: number }[] = [];
@@ -83,9 +84,28 @@ export type Island = {
   offer: null | { give: Resource; want: Resource };
   hands: Record<string, Hand>;
 };
-export type BoardView = Omit<Island, 'hands'> & { hand?: Hand };
+export type BoardView = Omit<Island, 'hands'> & { hand?: Hand; handSizes?: Record<string, number> };
 export const active = (b: BoardView) => b.order[b.turn];
+export const handSize = (hand: Hand) => Object.values(hand).reduce((sum, n) => sum + n, 0);
+export function piecesBuilt(b: BoardView, id: string): Record<Piece, number> {
+  const homes = Object.values(b.homes).filter((h) => h.id === id);
+  return {
+    road: Object.values(b.roads).filter((owner) => owner === id).length,
+    settlement: homes.filter((h) => !h.city).length,
+    city: homes.filter((h) => h.city).length,
+  };
+}
+// Upgrading to a city hands the settlement piece back.
+export function piecesLeft(b: BoardView, id: string): Record<Piece, number> {
+  const built = piecesBuilt(b, id);
+  return {
+    road: limits.road - built.road,
+    settlement: limits.settlement - built.settlement,
+    city: limits.city - built.city,
+  };
+}
 export function locations(b: BoardView, id: string, piece: Piece) {
+  if (piecesLeft(b, id)[piece] <= 0) return [];
   const adjacent = (v: number) => edges.filter((e) => e.a === v || e.b === v);
   const touches = (v: number) => edges.some((e, i) => (e.a === v || e.b === v) && b.roads[i] === id);
   if (piece === 'city')
