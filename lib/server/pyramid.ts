@@ -14,7 +14,7 @@ export type Pyramid = {
 };
 
 export function newPyramid(players: string[]): Pyramid {
-  const deck = [...'A23456789TJQK'].flatMap(rank => [...'SHDC'].map(suit => rank + suit));
+  const deck = [...'A23456789TJQK'].flatMap((rank) => [...'SHDC'].map((suit) => rank + suit));
   for (let index = deck.length - 1; index > 0; index--) {
     const other = Math.floor(Math.random() * (index + 1));
     [deck[index], deck[other]] = [deck[other], deck[index]];
@@ -29,14 +29,20 @@ export function newPyramid(players: string[]): Pyramid {
 }
 
 export function flipPyramid(board: Pyramid, index: unknown) {
-  if (index !== board.index || board.claim)
-    throw new GameError('Wait for the current card to finish.', 409);
+  if (index !== board.index || board.claim) throw new GameError('Wait for the current card to finish.', 409);
   board.index++;
   board.outcome = null;
   return board.index === board.cards.length;
 }
 
-export function claimPyramid(board: Pyramid, from: string, to: unknown, slot: unknown, index: unknown, players: string[]) {
+export function claimPyramid(
+  board: Pyramid,
+  from: string,
+  to: unknown,
+  slot: unknown,
+  index: unknown,
+  players: string[],
+) {
   if (index !== board.index || !board.cards[board.index] || board.claim || board.outcome)
     throw new GameError('This card is closed.', 409);
   if (typeof to !== 'string' || from === to || !players.includes(to))
@@ -53,11 +59,14 @@ export function resolvePyramid(board: Pyramid, player: string, call: boolean, in
   const card = board.hands[claim.from][claim.slot]!;
   const match = card[0] === board.cards[board.index][0];
   let end = 0;
-  const level = pyramidLevels.findIndex(size => board.index < (end += size)) + 1;
+  const level = pyramidLevels.findIndex((size) => board.index < (end += size)) + 1;
   board.hands[claim.from][claim.slot] = null;
   board.outcome = {
-    from: claim.from, to: claim.to, loser: call && !match ? claim.from : claim.to,
-    points: level, verdict: call ? (match ? 'match' : 'bluff') : 'accepted',
+    from: claim.from,
+    to: claim.to,
+    loser: call && !match ? claim.from : claim.to,
+    points: level,
+    verdict: call ? (match ? 'match' : 'bluff') : 'accepted',
     ...(call ? { card } : {}),
   };
   board.claim = null;
@@ -68,7 +77,7 @@ export function pyramidView(board: Pyramid, player?: string): PyramidView {
   const hand = player ? board.hands[player] : undefined;
   return {
     index: board.index,
-    cards: board.cards.map((card, index) => index <= board.index ? card : null),
+    cards: board.cards.map((card, index) => (index <= board.index ? card : null)),
     claim: board.claim ? { from: board.claim.from, to: board.claim.to } : null,
     outcome: board.outcome,
     hand: hand && board.index < 0 ? hand.filter((card): card is string => card !== null) : undefined,

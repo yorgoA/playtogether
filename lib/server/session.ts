@@ -61,7 +61,7 @@ const fastestReactionMs = 80;
 // Most of a late tap's delay we accept as network time.
 const networkAllowanceMs = 1500;
 function gameId(value: unknown): Game {
-  const game = gameIds.find(id => id === value);
+  const game = gameIds.find((id) => id === value);
   if (game) return game;
   throw new GameError('Choose an available game.');
 }
@@ -206,7 +206,7 @@ function start(r: Room, now: number) {
   lobby(r);
   r.phase = 'playing';
   if (r.game === 'pyramid') {
-    r.pyramid = newPyramid(r.players.map(p => p.id));
+    r.pyramid = newPyramid(r.players.map((p) => p.id));
     return;
   }
   r.deck = games[r.game].prepare(r.rounds);
@@ -315,11 +315,17 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
   } else if ((action === 'pyramidClaim' || action === 'pyramidReply') && player) {
     if (!r.pyramid || r.phase !== 'playing') throw new GameError('Pyramid is not active.', 409);
     if (action === 'pyramidClaim') {
-      claimPyramid(r.pyramid, player.id, command.target, command.slot, command.index,
-        r.players.filter(p => connected(p, now)).map(p => p.id));
+      claimPyramid(
+        r.pyramid,
+        player.id,
+        command.target,
+        command.slot,
+        command.index,
+        r.players.filter((p) => connected(p, now)).map((p) => p.id),
+      );
     } else {
       const outcome = resolvePyramid(r.pyramid, player.id, command.call === true, command.index);
-      r.players.find(p => p.id === outcome.loser)!.score -= outcome.points;
+      r.players.find((p) => p.id === outcome.loser)!.score -= outcome.points;
     }
   } else if (action === 'input' && player) {
     if (r.game === 'settlers') throw new GameError('Use the island controls.');

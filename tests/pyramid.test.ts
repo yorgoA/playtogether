@@ -42,7 +42,8 @@ describe('Pyramid room', () => {
     board.cards[14] = 'QS';
     board.hands[ana.id] = ['2H', 'KD', '3H', '4H'];
     const flip = () => host({ action: 'pyramidFlip', index: board.index });
-    const claim = (slot: number) => ana.send({ action: 'pyramidClaim', index: board.index, slot, target: sam.id });
+    const claim = (slot: number) =>
+      ana.send({ action: 'pyramidClaim', index: board.index, slot, target: sam.id });
     const reply = (call: boolean) => sam.send({ action: 'pyramidReply', index: board.index, call });
     flip();
     claim(0);
@@ -61,12 +62,12 @@ describe('Pyramid room', () => {
     reply(false);
     expect(board.outcome).toMatchObject({ verdict: 'accepted', loser: sam.id, points: 5 });
     expect(board.outcome?.card).toBeUndefined();
-    expect(room.players.map(player => player.score)).toEqual([-1, -7]);
+    expect(room.players.map((player) => player.score)).toEqual([-1, -7]);
     expect(RoomSnapshot.parse(ana.view()).pyramid?.slots).toEqual([false, false, false, true]);
     flip();
     expect(room.phase).toBe('results');
     host({ action: 'restart' });
     expect(room.pyramid?.index).toBe(-1);
-    expect(room.players.map(player => player.score)).toEqual([0, 0]);
+    expect(room.players.map((player) => player.score)).toEqual([0, 0]);
   });
 });
