@@ -64,7 +64,7 @@ const questions: Question[] = [
   ['What does a seismograph record?', 'Wind speed', 'Ground motion', 'Rainfall', 'Moon phases', 1],
 ];
 
-export type Game = 'quiz' | 'reaction' | 'turbo' | 'settlers';
+export type Game = (typeof import('../contract/rooms').gameIds)[number];
 export type RoundData = { text: string; options: string[]; correct: number };
 export type GameModule = {
   maxPlayers: number;
@@ -85,6 +85,15 @@ export class GameError extends Error {
 }
 
 export const games: Record<Game, GameModule> = {
+  pyramid: {
+    maxPlayers: 8,
+    duration: 0,
+    prepare: () => [],
+    signalDelay: () => 0,
+    score() {
+      throw new GameError('Use the Pyramid controls.');
+    },
+  },
   settlers: {
     maxPlayers: 4,
     duration: 0,
