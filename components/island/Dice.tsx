@@ -5,7 +5,7 @@ export const ROLL_MS=850;
 // True until the latest roll has had time to tumble on this screen.
 export function useRolling(room:Room){
  const stamp=room.island?.rolledAt??0;
- const [done,setDone]=useState(stamp);
+ const [done,setDone]=useState(0);
  const left=ROLL_MS-(room.serverTime-stamp);
  const rolling=done!==stamp&&left>0;
  useEffect(()=>{if(!rolling)return;const timer=setTimeout(()=>setDone(stamp),left);return ()=>clearTimeout(timer)},[rolling,stamp]); // eslint-disable-line react-hooks/exhaustive-deps
