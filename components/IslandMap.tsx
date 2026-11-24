@@ -1,22 +1,39 @@
 'use client';
-import {useId,useState} from 'react';
-import {ports,robberTile,edges,tiles,vertices,type Piece,type BoardView} from '@/lib/island/board';
+import {useState} from 'react';
+import {ports,robberTile,edges,tiles,vertices,type Piece,type BoardView,type Resource} from '@/lib/island/board';
 import type {Player} from '@/lib/controller/room';
-const palette={timber:['#779958','#3d6f55'],grain:['#f7d57b','#d5a04f'],wool:['#b9cd83','#86ac69'],clay:['#e7a676','#b96b50'],ore:['#a6aaa7','#727e89'],sand:['#e5cc96','#ccb07e']};
+import {resourceArt} from './island/icons';
+const fills={timber:'#5fa35a',grain:'#f0c658',wool:'#a5d866',clay:'#d98257',ore:'#9aa6b6',sand:'#f1dca2'};
+// Tiles sit inside their hexes so the sand between them reads as the road network.
+const inset=(t:(typeof tiles)[number],k:number)=>t.vs.map(v=>(t.x+(vertices[v].x-t.x)*k).toFixed(1)+','+(t.y+(vertices[v].y-t.y)*k).toFixed(1)).join(' ');
+const full=tiles.map(t=>inset(t,1)),land=tiles.map(t=>inset(t,.86));
+function Art({resource,x,y,size}:{resource:Resource,x:number,y:number,size:number}){
+ return <g transform={`translate(${x-size/2} ${y-size/2}) scale(${size/24})`}>{resourceArt[resource].map(([d,c],i)=><path key={i} d={d} fill={c}/>)}</g>;
+}
+function Coast(){
+ return <>
+  {[[46,'#2fb0cb'],[32,'#6bd9d8'],[20,'#eefbf3'],[16,'#f3dfae']].map(([width,color])=><g key={width}>{full.map((points,i)=><polygon key={i} points={points} stroke={String(color)} strokeWidth={width} strokeLinejoin="round" fill={String(color)}/>)}</g>)}
+  {full.map((points,i)=><polygon key={i} points={points} fill="#ecd29b"/>)}
+  {ports.map((p,i)=>{const a=vertices[p.a],b=vertices[p.b],mx=(a.x+b.x)/2,my=(a.y+b.y)/2,len=Math.hypot(mx,my),x=mx+mx/len*36,y=my+my/len*36;return <g key={i}><title>{p.kind==='any'?'General port 3:1':p.kind+' port 2:1'}</title>
+   {[a,b].map((c,j)=><g key={j}><line x1={c.x} y1={c.y} x2={x} y2={y} stroke="#7d5735" strokeWidth="6"/><line x1={c.x} y1={c.y} x2={x} y2={y} stroke="#c99a63" strokeWidth="4.5" strokeDasharray="2.5 1.3"/></g>)}
+   <path d={`M${x-19} ${y+9}q19 4 38 0l-7 10h-24z`} fill="#8d4f33"/><rect x={x-15} y={y-19} width="30" height="30" rx="5" fill="#fffaf0" stroke={p.kind==='any'?'#ef5b4c':'#1b8db0'} strokeWidth="1.8"/>
+   <text x={x} y={y-7} textAnchor="middle" fill="#12394a" fontSize="11" fontWeight="900">{p.kind==='any'?'3:1':'2:1'}</text>
+   {p.kind==='any'?<text x={x} y={y+6} textAnchor="middle" fill="#d8402f" fontSize="10" fontWeight="900">ANY</text>:<><rect x={x-11} y={y-5} width="22" height="14" rx="3" fill="#bfe0e4"/><Art resource={p.kind} x={x} y={y+2} size={13}/></>}</g>})}
+ </>;
+}
 export default function IslandMap({board,players,piece,legal=[],pick,selected}:{board:BoardView,players:Player[],piece?:Piece|'robber',legal?:number[],pick?:(n:number)=>void,selected?:number}){
- const uid=useId().replace(/:/g,''),[zoom,setZoom]=useState(false);
+ const [zoom,setZoom]=useState(false);
  const owner=(id:string)=>players.find(p=>p.id===id)?.color||'#fff';
- const house=(v:number,color:string,city:boolean)=>{const p=vertices[v];return <g key={v} transform={`translate(${p.x} ${p.y})`} fill={color} stroke="#273c40" strokeWidth="2"><path d={city?'M-10 6v-11l5-5 5 5v4l4-4 6 5v7z':'M-7 6v-8l7-6 7 6v8z'}/></g>};
- return <div className="isl-atlas">{pick&&<button className="isl-zoom" aria-pressed={zoom} onClick={()=>setZoom(!zoom)}>{zoom?'Fit island':'Zoom in'}</button>}<div className="isl-pan"><svg style={{width:zoom?'175%':'100%'}} viewBox="-267 -240 534 480" aria-label="Island board" role="group">
- <defs>{tiles.map((t,i)=><clipPath key={i} id={uid+'clip'+i}><polygon points={t.vs.map(v=>vertices[v].x+','+vertices[v].y).join(' ')}/></clipPath>)}{Object.entries(palette).map(([k,[a,b]])=><linearGradient key={k} id={uid+k} x2=".65" y2="1"><stop stopColor={a}/><stop offset="1" stopColor={b}/></linearGradient>)}
- <pattern id={uid+'sea'} width="41" height="28" patternUnits="userSpaceOnUse"><path d="M3 13q4 2 8 0m14 9q3 1 6 0" fill="none" stroke="#a4e1df" opacity=".22" strokeWidth="1"/></pattern></defs>
- <rect x="-260" y="-219" width="520" height="438" fill={'url(#'+uid+'sea)'}/>
- {[[30,'#24a6cd'],[21,'#65cfdf'],[14,'#b7eee6'],[10,'#f0deb0']].map(([width,color])=><g key={width}>{tiles.map((t,i)=><polygon key={i} points={t.vs.map(v=>vertices[v].x+','+vertices[v].y).join(' ')} stroke={String(color)} strokeWidth={width} strokeLinejoin="round" fill="#e9cf9c"/>)}</g>)}
- {tiles.map((t,i)=><g key={i}><polygon points={t.vs.map(v=>vertices[v].x+','+vertices[v].y).join(' ')} fill={'url(#'+uid+t.resource+')'} stroke="#e8d5a9" strokeWidth="4" strokeLinejoin="round"/><image clipPath={'url(#'+uid+'clip'+i+')'} href={'/art/island/'+t.resource+'.webp'} x={t.x-45} y={t.y-50} width="90" height="100" preserveAspectRatio="xMidYMid slice"/><polygon points={t.vs.map(v=>vertices[v].x+','+vertices[v].y).join(' ')} stroke="#e3cda2" strokeWidth="2" fill="none"/><text x={t.x} y={t.y+2} textAnchor="middle" fill="#fff4d9" stroke="#263e37" strokeWidth="2.3" paintOrder="stroke" fontFamily="Georgia,serif" fontSize="8.5" letterSpacing=".55">{t.resource==='sand'?'DUNES':t.resource.toUpperCase()}</text>{!!t.number&&<g transform={`translate(${t.x} ${t.y+18})`}><circle r="11" fill="#f9efd6" stroke="#84734e" strokeWidth="1.2"/><text y="4.5" textAnchor="middle" fontFamily="Georgia,serif" fontWeight="bold" fontSize="14" fill={[6,8].includes(t.number)?'#a14330':'#333d39'}>{t.number}</text></g>}</g>)}
- {ports.map((p,i)=>{const a=vertices[p.a],b=vertices[p.b],mx=(a.x+b.x)/2,my=(a.y+b.y)/2,len=Math.hypot(mx,my),x=mx+mx/len*25,y=my+my/len*25;return <g key={i}><title>{p.kind==='any'?'General port 3:1':p.kind+' port 2:1'}</title><path d={`M${a.x} ${a.y}L${x} ${y}L${b.x} ${b.y}`} fill="none" stroke="#d1bd92" strokeWidth="2"/><g transform={`translate(${x} ${y+3})`}><path d="M-20 4 Q0 9 21 3 L15 10 Q-4 15 -17 9Z" fill="#78563f" stroke="#493e35"/><path d="M-17 12 Q-2 17 16 12" stroke="#bcf3ef" fill="none"/></g><rect x={x-21} y={y-10} width="42" height="20" rx="4" fill="#193c42" stroke="#cfba93"/><text x={x} y={y-1} textAnchor="middle" fill="#fff3d4" fontSize="8" fontWeight="bold">{p.kind==='any'?'3:1':'2:1'}</text><text x={x} y={y+7} textAnchor="middle" fill="#fff3d4" fontSize="7">{p.kind==='any'?'ANY':p.kind.toUpperCase()}</text></g>})}
- {tiles.map((t,i)=>i===robberTile(board)&&<g key={i} transform={`translate(${t.x} ${t.y-9})`}><title>Robber · production blocked</title><path d="M-8 8l3-10q-4-2-2-6q2-4 7-6q6 3 7 7q1 3-3 5l4 10z" fill="#25292c" stroke="#efdfbc" strokeWidth="1.8"/></g>)}
- {Object.entries(board.roads).map(([i,id])=>{const e=edges[+i],a=vertices[e.a],b=vertices[e.b];return <g key={i}>{['#293b38',owner(id)].map((c,j)=><line key={j} x1={a.x} x2={b.x} y1={a.y} y2={b.y} stroke={c} strokeWidth={j?5:8} strokeLinecap="round"/>)}</g>})}
- {Object.entries(board.homes).map(([i,h])=>house(+i,owner(h.id),h.city))}
- {legal.map(i=>{const edge=edges[i],p=piece==='robber'?tiles[i]:piece==='road'?{x:(vertices[edge.a].x+vertices[edge.b].x)/2,y:(vertices[edge.a].y+vertices[edge.b].y)/2}:vertices[i];return <g key={i} className="isl-target" role="button" tabIndex={0} aria-label={piece+' location '+(i+1)} onClick={()=>pick?.(i)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick?.(i)}}}><circle cx={p.x} cy={p.y} r={piece==='robber'?25:16} fill="transparent"/><circle cx={p.x} cy={p.y} r={selected===i?9:5.5} fill={selected===i?'#182e38':'#fff8d8'} stroke={selected===i?'#fff':'#746246'} strokeWidth="2"/>{selected===i&&<text x={p.x} y={p.y+4} textAnchor="middle" fill="white" fontSize="12">✓</text>}</g>})}
- </svg></div></div>
+ const blocked=robberTile(board);
+ const house=(v:number,color:string,city:boolean)=>{const p=vertices[v];return <g key={v} transform={`translate(${p.x} ${p.y})`} fill={color} stroke="#12303c" strokeWidth="2.2" strokeLinejoin="round"><path d={city?'M-12 9v-15l6-6 6 6v3h11v12z':'M-8 8v-9l8-8 8 8v9z'}/></g>};
+ return <div className="isl-atlas">{pick&&<button className="isl-zoom" aria-pressed={zoom} onClick={()=>setZoom(!zoom)}>{zoom?'Fit island':'Zoom in'}</button>}<div className="isl-pan"><svg style={{width:zoom?'175%':'100%'}} viewBox="-278 -258 556 516" aria-label="Island board" role="group">
+  <Coast/>
+  {tiles.map((t,i)=><g key={i}><title>{t.resource==='sand'?'Dunes':t.resource}</title><polygon points={land[i]} fill={fills[t.resource]} stroke={fills[t.resource]} strokeWidth="5" strokeLinejoin="round"/>
+   {t.resource!=='sand'&&<><circle cx={t.x} cy={t.y-18} r="16" fill="#fffaf0" opacity=".72"/><Art resource={t.resource} x={t.x} y={t.y-18} size={25}/></>}
+   {!!t.number&&<g transform={`translate(${t.x} ${t.y+14})`}><circle r="14.5" fill={[6,8].includes(t.number)?'#ef5b4c':'#fffaf0'} stroke="#12394a" strokeOpacity=".35" strokeWidth="1.5"/><text y="6" textAnchor="middle" fontWeight="900" fontSize="17" fill={[6,8].includes(t.number)?'#fff':'#12394a'}>{t.number}</text></g>}
+   {i===blocked&&<g transform={`translate(${t.x+(t.number?21:0)} ${t.y+(t.number?2:0)})`}><title>Robber · production blocked</title><path d="M0-17v-14h12v7H0" fill="#e5484d" stroke="#12303c" strokeWidth="1.5"/><path d="M0-19L14 10h-28z" fill="#2b2533" stroke="#fff4d8" strokeWidth="1.8" strokeLinejoin="round"/><path d="M0-3L5 10H-5z" fill="#e5484d"/></g>}</g>)}
+  {Object.entries(board.roads).map(([i,id])=>{const e=edges[+i],a=vertices[e.a],b=vertices[e.b],k=.17,x1=a.x+(b.x-a.x)*k,x2=b.x+(a.x-b.x)*k,y1=a.y+(b.y-a.y)*k,y2=b.y+(a.y-b.y)*k;return <g key={i}>{['#12303c',owner(id)].map((c,j)=><line key={j} x1={x1} x2={x2} y1={y1} y2={y2} stroke={c} strokeWidth={j?6:10} strokeLinecap="round"/>)}</g>})}
+  {Object.entries(board.homes).map(([i,h])=>house(+i,owner(h.id),h.city))}
+  {legal.map(i=>{const edge=edges[i],p=piece==='robber'?tiles[i]:piece==='road'?{x:(vertices[edge.a].x+vertices[edge.b].x)/2,y:(vertices[edge.a].y+vertices[edge.b].y)/2}:vertices[i];return <g key={i} className="isl-target" role="button" tabIndex={0} aria-label={piece+' location '+(i+1)} onClick={()=>pick?.(i)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick?.(i)}}}><circle cx={p.x} cy={p.y} r={piece==='robber'?32:18} fill="transparent"/><circle className="isl-spot" cx={p.x} cy={p.y} r={selected===i?11:7.5} fill={selected===i?'#12303c':'#fff'} stroke={selected===i?'#fff':'#12303c'} strokeWidth="2.5"/>{selected===i&&<text x={p.x} y={p.y+5} textAnchor="middle" fill="white" fontSize="14">✓</text>}</g>})}
+ </svg></div></div>;
 }
