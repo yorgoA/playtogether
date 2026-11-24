@@ -10,7 +10,8 @@ import {
 } from './racing';
 import { GameError, games, type Game, type RoundData } from './games';
 
-import type { RoomSnapshot } from '../contract';
+import { gameIds, type RoomSnapshot } from '../contract';
+import { claimPyramid, flipPyramid, newPyramid, pyramidView, resolvePyramid, type Pyramid } from './pyramid';
 import { islandMove, startIsland } from './island';
 import { handSize, pointsFor, type Island } from '../island/board';
 import { botMove } from './island-bot';
@@ -42,6 +43,7 @@ export type Room = {
   deck: RoundData[];
   botAt?: number;
   island?: Island;
+  pyramid?: Pyramid;
   revealing?: boolean;
   race?: ReturnType<typeof createRace>;
   started: number;
@@ -59,7 +61,8 @@ const fastestReactionMs = 80;
 // Most of a late tap's delay we accept as network time.
 const networkAllowanceMs = 1500;
 function gameId(value: unknown): Game {
-  if (value === 'quiz' || value === 'reaction' || value === 'turbo' || value === 'settlers') return value;
+  const game = gameIds.find((id) => id === value);
+  if (game) return game;
   throw new GameError('Choose an available game.');
 }
 function roundCount(value: unknown) {
@@ -116,7 +119,7 @@ function advanceBots(r: Room, now: number) {
   return false;
 }
 function advance(r: Room, now: number) {
-  if (r.phase !== 'playing' || r.game === 'settlers') return false;
+  if (r.phase !== 'playing' || r.game === 'settlers' || r.game === 'pyramid') return false;
   if (r.game === 'turbo' && r.race) {
     advanceRace(r.race, Math.min(now, r.deadline));
     const scores = raceScores(r.race, r.started);
@@ -147,6 +150,7 @@ function lobby(r: Room) {
   r.deck = [];
   delete r.race;
   delete r.island;
+  delete r.pyramid;
   r.players.forEach((p) => {
     p.answered = false;
     p.reactionMs = undefined;
@@ -181,6 +185,12 @@ function removePlayer(r: Room, p: Player, now: number) {
     lobby(r);
     return;
   }
+  if (r.pyramid) {
+    const claim = r.pyramid.claim;
+    if (claim && (claim.from === p.id || claim.to === p.id)) r.pyramid.claim = null;
+    if (r.players.length < 2) r.phase = 'results';
+    return;
+  }
   // While paused, the deadline moves forward on resume.
   if (r.race || r.revealing) return;
   revealWhenAllAnswered(r, r.phase === 'paused' ? r.pausedAt : now);
@@ -188,11 +198,17 @@ function removePlayer(r: Room, p: Player, now: number) {
 function start(r: Room, now: number) {
   if (r.game === 'settlers' && r.players.length < 2)
     throw new GameError('Island Settlers needs two to four players.');
+  if (r.game === 'pyramid' && r.players.length < 2)
+    throw new GameError('Pyramid needs two to eight players.');
   if (!r.players.some((p) => !p.bot && !p.standIn)) throw new GameError('Join with a phone before starting.');
   if (r.players.some((p) => !p.ready || !(p.standIn || connected(p, now))))
     throw new GameError('Every player must be connected and ready.');
   lobby(r);
   r.phase = 'playing';
+  if (r.game === 'pyramid') {
+    r.pyramid = newPyramid(r.players.map((p) => p.id));
+    return;
+  }
   r.deck = games[r.game].prepare(r.rounds);
   beginRound(r, now);
   if (r.game === 'settlers') {
@@ -296,8 +312,24 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
     if (!r.island || r.phase !== 'playing')
       throw new GameError(r.phase === 'paused' ? 'The game is paused.' : 'The match is not active.', 409);
     playIsland(r, player, command, now);
+  } else if ((action === 'pyramidClaim' || action === 'pyramidReply') && player) {
+    if (!r.pyramid || r.phase !== 'playing') throw new GameError('Pyramid is not active.', 409);
+    if (action === 'pyramidClaim') {
+      claimPyramid(
+        r.pyramid,
+        player.id,
+        command.target,
+        command.slot,
+        command.index,
+        r.players.filter((p) => connected(p, now)).map((p) => p.id),
+      );
+    } else {
+      const outcome = resolvePyramid(r.pyramid, player.id, command.call === true, command.index);
+      r.players.find((p) => p.id === outcome.loser)!.score -= outcome.points;
+    }
   } else if (action === 'input' && player) {
     if (r.game === 'settlers') throw new GameError('Use the island controls.');
+    if (r.game === 'pyramid') throw new GameError('Use the Pyramid controls.');
     if (r.game === 'turbo') throw new GameError('Use your driving controls.');
     if (r.phase !== 'playing' || r.revealing || command.round !== r.round)
       throw new GameError('This round is closed.', 409);
@@ -362,6 +394,10 @@ export function mutate(r: Room, command: Command, token: string, now: number) {
         if (r.phase !== 'lobby' && r.phase !== 'results')
           throw new GameError('A match is already in progress.');
         start(r, now);
+        break;
+      case 'pyramidFlip':
+        if (!r.pyramid || r.phase !== 'playing') throw new GameError('Pyramid is not active.', 409);
+        if (flipPyramid(r.pyramid, command.index)) r.phase = 'results';
         break;
       case 'restart':
         start(r, now);
@@ -435,6 +471,7 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
   const q = r.round && ['playing', 'paused'].includes(r.phase) ? r.deck[r.round - 1] : null;
   return {
     island,
+    pyramid: r.pyramid ? pyramidView(r.pyramid, viewer?.id) : undefined,
     code: r.code,
     game: r.game,
     phase: r.phase,
