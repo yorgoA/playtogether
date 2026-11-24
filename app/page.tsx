@@ -12,7 +12,7 @@ const categories = [
   { id: 'arcade', title: 'Arcade', art: 'mayhem' },
 ];
 function Meta({g}:{g:Game}){return <div className="meta"><span><Users/>{g.players} players</span><i/><span><Timer/>{g.duration}</span></div>}
-function Cover({g}:{g:Game}){let words=g.name.split(' ');return <div className={'cover '+g.art} style={{backgroundImage:'url(/art/'+g.art+'.webp)'}}><span className="coverLogo">{words[0]}<br/>{words[1]}</span></div>}
+function Cover({g}:{g:Game}){let words=g.name.split(' ');return <div className={'cover '+g.art} style={g.art==='pyramid'?undefined:{backgroundImage:'url(/art/'+g.art+'.webp)'}}><span className="coverLogo">{words[0]}<br/>{words[1]}</span></div>}
 export default function Home(){
  const [view,setView]=useState('Home'),[index,setIndex]=useState(0),[detail,setDetail]=useState<Game|null>(null),[help,setHelp]=useState(false),[playing,setPlaying]=useState(''),[recent,setRecent]=useState<string[]>([]),[resume,setResume]=useState('');const modal=useRef<HTMLDialogElement>(null);
  const [profileOpen,setProfileOpen]=useState(false),[viewer,setViewer]=useState<Viewer|null>(null),[favorites,setFavorites]=useState<string[]>([]),[query,setQuery]=useState(''),[paused,setPaused]=useState(false),[heroFocus,setHeroFocus]=useState(false);
@@ -27,7 +27,7 @@ export default function Home(){
  function play(g:Game){setDetail(null);const arr=[g.id,...recent.filter(k=>k!==g.id)].slice(0,8);setRecent(arr);localStorage.setItem(prefix+'-recent',JSON.stringify(arr));setPlaying(g.id)}
  function nav(v:string){setView(v);setQuery('');window.scrollTo(0,0)}
  if(playing)return <GameSession game={playing} onExit={()=>setPlaying('')}/>;
- const features=[games[4],games[0],games[1]],feat=features[index];
+ const features=['settlers','quiz','turbo'].map(id=>games.find(game=>game.id===id)!),feat=features[index];
  const sections=view==='Home'?categories.map(({id,title})=>({id,title,items:games.filter(g=>g.group===title)})):[{id:undefined,title:view,items:view==='Search'?games.filter(g=>(g.name+' '+g.group).toLowerCase().includes(query.trim().toLowerCase())):(view==='Favorites'?favorites:recent).flatMap(id=>games.filter(g=>g.id===id))}];
  return <div className="hub"><header className="top"><div className="topInner"><button className="brand" onClick={()=>nav('Home')} aria-label="PlayTogether home"><img src="/favicon.svg" alt=""/><span>Play<span>Together</span></span></button><nav>{[['Search',Search],['Home',House],['Recents',History],['Favorites',Heart]].map(([label,I])=>{const Icon=I as typeof House;return <button key={String(label)} className={view===label?'selected':''} onClick={()=>nav(String(label))}><Icon/>{String(label)}</button>})}</nav><button className="join" aria-label="Open profile" onClick={()=>setProfileOpen(true)}>{viewer?<>{viewer.avatar} {viewer.name}</>:<UserCircle/>}</button></div></header>
  <main className="main">{view==='Home'&&<><div className="homeTools"><button className="how" onClick={()=>setHelp(true)}><HelpCircle/>How to play</button></div>

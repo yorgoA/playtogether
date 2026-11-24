@@ -4,7 +4,7 @@ import { z } from 'zod';
 // real responses against the response schemas. A field added, removed or retyped on either side fails CI
 // until this file (and the screens that read it) agree.
 
-export const gameIds = ['quiz', 'reaction', 'turbo', 'settlers'] as const;
+export const gameIds = ['quiz', 'reaction', 'turbo', 'settlers', 'pyramid'] as const;
 export const resources = ['timber', 'clay', 'grain', 'wool', 'ore'] as const;
 export const pieces = ['road', 'settlement', 'city'] as const;
 const Game = z.enum(gameIds);
@@ -24,6 +24,13 @@ export const CreateRoomRequest = z.object({ game: Game.optional(), rounds: z.num
 const nothing = (action: string) => z.object({ action: z.literal(action) });
 // Sent by a phone with its player token.
 const playerCommands = [
+  z.object({
+    action: z.literal('pyramidClaim'),
+    index: z.number().int(),
+    slot: z.number().int().min(0).max(3),
+    target: z.string().max(60),
+  }),
+  z.object({ action: z.literal('pyramidReply'), index: z.number().int(), call: z.boolean() }),
   z.object({
     action: z.literal('join'),
     name: z.string().min(1).max(40),
@@ -61,6 +68,7 @@ const playerCommands = [
 ] as const;
 // Sent by the host screen with the host token.
 const hostCommands = [
+  z.object({ action: z.literal('pyramidFlip'), index: z.number().int() }),
   nothing('addBot'),
   nothing('start'),
   nothing('restart'),
@@ -140,9 +148,28 @@ const Island = z
   })
   .strict();
 
+const Card = z.string().regex(/^[A23456789TJQK][SHDC]$/);
+const Pyramid = z.object({
+  index: z.number().int(),
+  cards: z.array(Card.nullable()).length(15),
+  claim: z.object({ from: z.string(), to: z.string() }).strict().nullable(),
+  outcome: z.object({
+    from: z.string(),
+    to: z.string(),
+    loser: z.string(),
+    points: z.number().int(),
+    verdict: z.enum(['accepted', 'match', 'bluff']),
+    card: Card.optional(),
+  }).strict().nullable(),
+  hand: z.array(Card).optional(),
+  slots: z.array(z.boolean()).length(4).optional(),
+}).strict();
+export type PyramidView = z.infer<typeof Pyramid>;
+
 export const RoomSnapshot = z
   .object({
     island: Island.optional(),
+    pyramid: Pyramid.optional(),
     code: z.string().length(4),
     game: Game,
     phase: Phase,
