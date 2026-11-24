@@ -13,7 +13,9 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "dev:lan": "vite --host 0.0.0.0 --port 5173",
-    "db:local": "wrangler d1 migrations apply DB --local --persist-to .wrangler/state"
+    "db:local": "wrangler d1 migrations apply DB --local --persist-to .wrangler/state",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -62,6 +64,7 @@
     "typescript": "5.9.3",
     "vinext": "1.0.0-beta.5",
     "vite": "8.0.13",
+    "vitest": "3.2.7",
     "wrangler": "4.92.0"
   },
   "type": "module",
