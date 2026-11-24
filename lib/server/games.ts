@@ -36,7 +36,8 @@ export type GameModule = {
   duration: number;
   prepare(rounds: number): RoundData[];
   signalDelay(): number;
-  score(round: RoundData, value: number, now: number, start: number, signal: number): number;
+  // value is the chosen answer for quizzes and the reaction time in milliseconds for reaction rounds.
+  score(round: RoundData, value: number, now: number, start: number): number;
 };
 
 export class GameError extends Error {
@@ -68,10 +69,6 @@ export const games: Record<Game, GameModule> = {
     maxPlayers: 8, duration: 10000,
     prepare: count => Array.from({ length: count }, () => ({ text: 'React when the signal lights up!', options: [], correct: -1 })),
     signalDelay: () => 2000 + Math.floor(Math.random() * 3000),
-    score(_round, value, now, _start, signal) {
-      if (value !== 1) throw new GameError('Invalid reaction.');
-      if (now < signal) throw new GameError('Wait for the signal.');
-      return Math.max(50, 1000 - Math.round((now - signal) / 5));
-    },
+    score: (_round, value) => Math.max(50, 1000 - Math.round(value / 5)),
   },
 };
