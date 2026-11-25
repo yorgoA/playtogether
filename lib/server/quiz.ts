@@ -1,4 +1,4 @@
-import type { QuizPower, QuizType, QuizView } from '../contract/rooms';
+import type { Difficulty, QuizPower, QuizType, QuizView } from '../contract/rooms';
 import { crossOutAt, introMs, powerMs, quizPowers, quizTypes, revealMs, suspenseMs } from '../quiz/rules';
 import { GameError } from './games';
 import { contends, maxTiebreaks, totalRounds } from './rounds';
@@ -21,8 +21,17 @@ export type Quiz = {
   picks: Record<string, { value: number; at: number }>;
   // Wrong answers the TV crosses out during the suspense, in order.
   crossed: number[];
+  // Each bot's plan for this question: when it answers, and whether it knows the answer.
+  aims?: Record<string, { at: number; right: boolean }>;
 };
-type Seat = { id: string; score: number; gained?: number; answered: boolean };
+type Seat = {
+  bot?: boolean;
+  difficulty?: Difficulty;
+  id: string;
+  score: number;
+  gained?: number;
+  answered: boolean;
+};
 // The parts of a room a quiz works with.
 export type QuizRoom = {
   quiz?: Quiz;
@@ -136,6 +145,7 @@ function nextRound(r: QuizRoom, now: number) {
     cost: {},
     picks: {},
     crossed: [],
+    aims: {},
   });
   for (const p of r.players) {
     p.answered = false;
@@ -187,6 +197,7 @@ export function hurryQuiz(r: QuizRoom, here: (p: Seat) => boolean, now: number) 
 function toQuestion(r: QuizRoom, now: number) {
   playPowers(r);
   enter(r, 'question', now, quizTypes[roundOf(r).type].ms);
+  planBots(r);
 }
 function toSuspense(r: QuizRoom, now: number) {
   const q = r.quiz!;
@@ -337,4 +348,71 @@ export function quizView(r: QuizRoom, viewer: string | undefined, host: boolean,
         : { text: round.text, options: round.options.map(conceal) },
     correct: host && reveal ? round.correct : null,
   };
+}
+
+// How often a bot knows the answer (otherwise it guesses), and when it answers, as a share of the time.
+const botSkill: Record<Difficulty, { right: number; from: number; to: number }> = {
+  easy: { right: 0.3, from: 0.45, to: 0.85 },
+  normal: { right: 0.55, from: 0.3, to: 0.65 },
+  hard: { right: 0.8, from: 0.15, to: 0.4 },
+};
+// How far into the power stage bots choose, so the table sees them think.
+export const botPowerMs = 2500;
+const pick = <T>(list: readonly T[]) => list[Math.floor(Math.random() * list.length)];
+
+// Easy keeps its powers. Normal plays one a round in three, never at a player. Hard plays one every round,
+// aiming at the leader, but no 50:50: it mostly knows the answer, so the cost would be wasted.
+function botPower(r: QuizRoom, id: string, level: Difficulty) {
+  const hand = r.quiz!.hands[id] ?? [];
+  const others = r.players.filter((p) => p.id !== id);
+  const usable = hand.filter((p) =>
+    level === 'hard' ? p !== 'half' && (!quizPowers[p].target || others.length) : !quizPowers[p].target,
+  );
+  if (level === 'easy' || !usable.length || (level === 'normal' && Math.random() >= 1 / 3))
+    return { power: null };
+  const power = pick(usable);
+  const leader = others.reduce((a, b) => (b.score > a.score ? b : a), others[0]);
+  return quizPowers[power].target ? { power, target: leader.id } : { power };
+}
+
+// Rolled once, when the question starts, so the plan is saved with the room and holds on every request.
+function planBots(r: QuizRoom) {
+  const q = r.quiz!;
+  const { ms } = quizTypes[roundOf(r).type];
+  q.aims = {};
+  for (const p of r.players) {
+    if (!p.bot || !contends(r, p.id)) continue;
+    const skill = botSkill[p.difficulty ?? 'normal'];
+    q.aims[p.id] = {
+      at: Math.round(ms * (skill.from + Math.random() * (skill.to - skill.from))),
+      right: Math.random() < skill.right,
+    };
+  }
+}
+
+// Plays for the bots whose moment has come. Returns whether one acted. Bystanders sit out a tie-break.
+export function quizBots(r: QuizRoom, bots: Record<string, Difficulty>, now: number) {
+  const q = r.quiz!;
+  let acted = false;
+  for (const p of r.players) {
+    const level = bots[p.id];
+    if (!level || !contends(r, p.id)) continue;
+    if (q.stage === 'power' && !q.chosen[p.id] && q.hands[p.id]?.length && now >= r.started + botPowerMs) {
+      choosePower(r, p.id, { round: r.round, ...botPower(r, p.id, level) });
+      acted = true;
+    } else if (q.stage === 'question' && !p.answered) {
+      const aim = q.aims?.[p.id];
+      if (!aim) continue;
+      const at = r.started + aim.at;
+      if (now < at || at >= cutoff(r, p.id)) continue;
+      const { correct } = roundOf(r);
+      const allowed = [0, 1, 2, 3].filter((i) => !q.removed[p.id]?.includes(i));
+      // Smoke hides answers from bots too: one that cannot see the right one guesses, like one that never knew.
+      const knows = aim.right && !q.smoked[p.id]?.includes(correct);
+      const value = knows ? correct : pick(allowed);
+      answerQuiz(r, p, { round: r.round, value }, at);
+      acted = true;
+    }
+  }
+  return acted;
 }
