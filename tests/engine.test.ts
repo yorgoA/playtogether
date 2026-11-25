@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { gameIds, RoomSnapshot, type Difficulty } from '../lib/contract';
 import {
   botDelayMs,
@@ -13,6 +13,8 @@ import {
 } from '../lib/server/engine';
 import { modules } from '../lib/server/modules';
 import { T0 } from './helpers';
+
+afterEach(() => vi.restoreAllMocks());
 
 // A small game for the engine alone: players take turns adding one to their count, and three wins.
 type Count = { order: string[]; turn: string; counts: Record<string, number> };
@@ -52,6 +54,7 @@ const at = (now = T0, bots: Record<string, Difficulty> = {}) => ({ now, connecte
 function setup(players = ['a', 'b', 'c']) {
   const room: MatchRoom & { count?: Count } = {
     phase: 'playing',
+    started: 0,
     deadline: 0,
     players: players.map((id) => ({ id, score: 0 })),
   };
@@ -81,7 +84,7 @@ describe('Game engine', () => {
 
   it('never plays for anyone in a game without a turn clock', () => {
     const untimed = { ...counting, turnMs: undefined };
-    const room: MatchRoom & { count?: Count } = { phase: 'playing', deadline: 0, players: [] };
+    const room: MatchRoom & { count?: Count } = { phase: 'playing', started: 0, deadline: 0, players: [] };
     startMatch(untimed, room, at());
     expect(room.deadline).toBe(0);
     expect(tickMatch(untimed, room, at(T0 + 99_000))).toBe(false);
@@ -99,12 +102,25 @@ describe('Game engine', () => {
     expect(room.deadline).toBe(T0 + 2000 + botDelayMs + 10_000);
   });
 
-  it('plays as if out of time when a bot sends a move the game refuses', () => {
+  it('plays as if out of time when a bot sends a move the game refuses, and logs it', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { room, s } = setup();
     const confused = { ...counting, bot: () => ({ bad: true }) };
     expect(tickMatch(confused, room, at(T0 + botDelayMs, { a: 'easy' }))).toBe(true);
     expect(s.counts.a).toBe(0);
     expect(s.turn).toBe('b');
+    expect(warn).toHaveBeenCalledWith('Quiz Volt refused a bot move:', new Error('Not a move.'));
+  });
+
+  it('times bots from the start of the turn in a game without a turn clock', () => {
+    const untimed = { ...counting, turnMs: undefined };
+    const room: MatchRoom & { count?: Count } = { phase: 'playing', started: 0, deadline: 0, players: [] };
+    startMatch(untimed, room, at());
+    room.count = { order: ['a', 'b'], turn: 'a', counts: { a: 0, b: 0 } };
+    expect(tickMatch(untimed, room, at(T0 + botDelayMs - 1, { a: 'normal' }))).toBe(false);
+    expect(tickMatch(untimed, room, at(T0 + botDelayMs, { a: 'normal' }))).toBe(true);
+    expect(room.count.turn).toBe('b');
+    expect(room.started).toBe(T0 + botDelayMs);
   });
 
   it('forgets the match when the room goes back to the lobby', () => {

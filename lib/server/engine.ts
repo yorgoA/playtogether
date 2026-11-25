@@ -44,6 +44,8 @@ export type AnyModule = GameModule<any, unknown>;
 // The parts of a room the engine reads and writes. The match itself sits under the module's `key`.
 export type MatchRoom = {
   phase: 'lobby' | 'playing' | 'paused' | 'results' | 'ended';
+  // When the current turn started. Pausing moves it on, like the deadline.
+  started: number;
   deadline: number;
   players: { id: string; score: number }[];
 };
@@ -56,6 +58,7 @@ export function startMatch<S, V>(m: GameModule<S, V>, r: MatchRoom, ctx: MatchCo
     r.players.map((p) => p.id),
     ctx,
   );
+  r.started = ctx.now;
   r.deadline = m.turnMs ? ctx.now + m.turnMs : 0;
 }
 
@@ -79,12 +82,12 @@ export function tickMatch<S, V>(m: GameModule<S, V>, r: MatchRoom, ctx: MatchCon
   if (!state || r.phase !== 'playing') return false;
   const turn = m.turn?.(state);
   const level = turn ? ctx.bots[turn] : undefined;
-  const started = m.turnMs ? r.deadline - m.turnMs : ctx.now;
-  if (turn && level && m.bot && ctx.now >= started + botDelayMs) {
+  if (turn && level && m.bot && ctx.now >= r.started + botDelayMs) {
     try {
       m.move(state, turn, m.bot(state, turn, level), ctx);
-    } catch {
+    } catch (error) {
       // Every request runs this first, so a bot's bad move must not jam the room. It plays as if out of time.
+      console.warn(games[m.game].name + ' refused a bot move:', error);
       if (!m.timeout) return false;
       m.timeout(state, ctx);
     }
@@ -117,10 +120,18 @@ export function viewMatch<S, V>(m: GameModule<S, V>, r: MatchRoom, viewer: { id?
   return state === undefined ? undefined : m.view(state, viewer);
 }
 
-function settle<S, V>(m: GameModule<S, V>, r: MatchRoom, state: S, now: number, restart: boolean) {
-  if (restart && m.turnMs) r.deadline = now + m.turnMs;
-  if (!m.over(state)) return;
+// Ends the match now, with the scores as they stand.
+export function endMatch<S, V>(m: GameModule<S, V>, r: MatchRoom) {
+  const state = matchOf(m, r);
   r.phase = 'results';
   r.deadline = 0;
-  for (const p of r.players) p.score = m.score(state, p.id);
+  if (state !== undefined) for (const p of r.players) p.score = m.score(state, p.id);
+}
+
+function settle<S, V>(m: GameModule<S, V>, r: MatchRoom, state: S, now: number, restart: boolean) {
+  if (restart) {
+    r.started = now;
+    if (m.turnMs) r.deadline = now + m.turnMs;
+  }
+  if (m.over(state)) endMatch(m, r);
 }
