@@ -20,6 +20,7 @@ import {
 import { stormModule, type Storm } from './storm';
 import {
   clearMatch,
+  endMatch,
   leaveMatch,
   playMatch,
   startMatch,
@@ -215,6 +216,16 @@ function removePlayer(r: Room, p: Player, now: number) {
   if (r.phase !== 'playing' && r.phase !== 'paused') return;
   if (!r.players.length) {
     lobby(r);
+    return;
+  }
+  // Bots never play on alone: once no phone is left, the match ends with the scores as they stand.
+  if (!r.players.some((other) => !other.bot)) {
+    const engine = activeModule(r);
+    if (engine) endMatch(engine, r);
+    else {
+      r.phase = 'results';
+      r.deadline = 0;
+    }
     return;
   }
   if (r.contenders) {

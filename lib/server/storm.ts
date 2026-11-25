@@ -178,9 +178,10 @@ function streakFrom(card: string, rest: string[], budget = { left: 1000 }, depth
 }
 
 // Plays from what its seat may see: its own hand and the table, never the deck or other hands.
-// Easy slips one turn in three and never plays a Gust or a Calm. Normal plays the first card that fits, and a
-// Gust or a Calm before drawing. Hard starts the longest streak it can, blows a Gust at any rival down to two
-// cards, and gives away a card that fits neither pile.
+// Easy slips one turn in three, drawing or ending its streak early. Normal plays the first card that fits.
+// Hard starts the longest streak it can, blows a Gust at any rival down to two cards, and gives away a card
+// that fits neither pile. When nothing fits, every level plays a Gust or a Calm before drawing, so no bot holds
+// one forever. Normal and hard also take a win in one move: a Gust that gives away their last other card.
 export function stormBot(v: StormView, id: string, level: Difficulty): Record<string, unknown> {
   const hand = v.hand ?? [];
   const send = (command: Record<string, unknown>) => ({ ...command, seq: v.seq });
@@ -220,10 +221,12 @@ export function stormBot(v: StormView, id: string, level: Difficulty): Record<st
       give: (level === 'hard' && useless) || others[0],
     });
   };
+  if (level !== 'easy' && hand.includes('G') && hand.length === 2) return gust();
   if (level === 'hard' && hand.includes('G') && hand.length > 1 && v.sizes[leader] <= 2) return gust();
-  if (best && !slip) return send({ move: 'play', ...best });
-  if (level !== 'easy' && hand.includes('G')) return gust();
-  if (level !== 'easy' && hand.includes('C')) return send({ move: 'play', card: 'C' });
+  if (slip) return send({ move: 'draw' });
+  if (best) return send({ move: 'play', ...best });
+  if (hand.includes('G')) return gust();
+  if (hand.includes('C')) return send({ move: 'play', card: 'C' });
   return send({ move: 'draw' });
 }
 

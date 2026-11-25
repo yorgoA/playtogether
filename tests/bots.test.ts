@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { difficulties, type StormView } from '../lib/contract';
-import { botName, botNames } from '../lib/server/bots';
+import { botColors, botName, botNames } from '../lib/server/bots';
 import { botDelayMs } from '../lib/server/engine';
 import { snapshot } from '../lib/server/session';
 import { newStorm, stormBot, stormMove, stormOver, stormView } from '../lib/server/storm';
-import { T0, table as room } from './helpers';
+import { DROP, T0, table as room } from './helpers';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -38,7 +38,7 @@ describe('Storm Deck bots', () => {
     expect(stormBot(table(), 'me', 'easy')).toEqual({ move: 'play', card: 'E4', pile: 0, seq: 4 });
   });
 
-  it('play a Gust or a Calm before drawing, from the normal level', () => {
+  it('play a Gust or a Calm before drawing, at every level', () => {
     expect(stormBot(table({ hand: ['F1', 'C', 'G'] }), 'me', 'normal')).toEqual({
       move: 'play',
       card: 'G',
@@ -47,7 +47,8 @@ describe('Storm Deck bots', () => {
       seq: 4,
     });
     expect(stormBot(table({ hand: ['F1', 'C'] }), 'me', 'normal')).toMatchObject({ move: 'play', card: 'C' });
-    expect(stormBot(table({ hand: ['F1', 'C'] }), 'me', 'easy')).toMatchObject({ move: 'draw' });
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    expect(stormBot(table({ hand: ['F1', 'C'] }), 'me', 'easy')).toMatchObject({ move: 'play', card: 'C' });
     expect(stormBot(table({ hand: ['F1'] }), 'me', 'normal')).toMatchObject({ move: 'draw' });
   });
 
@@ -77,13 +78,33 @@ describe('Storm Deck bots', () => {
     expect(stormBot(close, 'me', 'normal')).toMatchObject({ card: 'E4' });
   });
 
-  it.each(difficulties)('play only legal moves at the %s level, until a match ends', (level) => {
-    seededRandom();
-    const s = newStorm(['a', 'b', 'c', 'd']);
-    for (let moves = 0; !stormOver(s) && moves < 5000; moves++)
-      stormMove(s, s.turn, stormBot(stormView(s, s.turn), s.turn, level));
-    expect(stormOver(s)).toBe(true);
+  it('take a win in one move: a Gust that gives away their last other card', () => {
+    const last = table({ hand: ['E4', 'G'] });
+    for (const level of ['normal', 'hard'] as const)
+      expect(stormBot(last, 'me', level)).toEqual({
+        move: 'play',
+        card: 'G',
+        target: 'b',
+        give: 'E4',
+        seq: 4,
+      });
   });
+
+  it.each(difficulties)(
+    'play only legal moves at the %s level, and finish every match among four bots',
+    (level) => {
+      const unfinished = [];
+      for (let seed = 1; seed <= 60; seed++) {
+        seededRandom(seed);
+        const s = newStorm(['a', 'b', 'c', 'd']);
+        for (let moves = 0; !stormOver(s) && moves < 5000; moves++)
+          stormMove(s, s.turn, stormBot(stormView(s, s.turn), s.turn, level));
+        if (!stormOver(s)) unfinished.push(seed);
+        vi.restoreAllMocks();
+      }
+      expect(unfinished).toEqual([]);
+    },
+  );
 });
 
 describe('bot seats', () => {
@@ -121,6 +142,25 @@ describe('bot seats', () => {
     host({ action: 'addBot' });
     host({ action: 'addBot' });
     expect(() => host({ action: 'start' })).toThrow('Join with a phone before starting.');
+  });
+
+  it('wear a colour no player at the table has', () => {
+    const { room: r, host } = room('storm', 4);
+    r.players.forEach((p, i) => (p.color = botColors[i]));
+    for (let i = 0; i < 3; i++) host({ action: 'addBot' });
+    const colors = r.players.map((p) => p.color);
+    expect(new Set(colors).size).toBe(colors.length);
+  });
+
+  it('end the match once no phone is left at the table', () => {
+    const { room: r, host, seats } = room('storm', 1);
+    host({ action: 'addBot' });
+    host({ action: 'addBot' });
+    host({ action: 'start' });
+    // A phone can only be removed once it has gone quiet.
+    host({ action: 'kick', playerId: seats[0].id }, T0 + DROP);
+    expect(r.phase).toBe('results');
+    expect(r.players.every((p) => p.bot)).toBe(true);
   });
 
   it('get numbered names once every bot name is taken', () => {

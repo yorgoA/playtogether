@@ -15,7 +15,17 @@ export const botNames = [
   'Bolt',
   'Widget',
 ];
-export const botColors = ['#bc96ff', '#ffae65', '#69dafa', '#c3f76a'];
+// Eight, so a bot finds a colour nobody wears even at a full Storm Deck table.
+export const botColors = [
+  '#bc96ff',
+  '#ffae65',
+  '#69dafa',
+  '#c3f76a',
+  '#ff8fb8',
+  '#ffd166',
+  '#7ee8c3',
+  '#a3a8ff',
+];
 
 // A name nobody at the table has, ignoring case, like nicknames.
 export function botName(taken: string[]) {
