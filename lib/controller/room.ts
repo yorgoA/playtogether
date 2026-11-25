@@ -1,5 +1,6 @@
 "use client";
 import {useCallback,useEffect,useRef,useState} from 'react';
+import type { Difficulty } from '../bots/rules';
 import type { DuelView, KingsView, QuizView, StormView, PyramidView, RoomSnapshot } from '../contract';
 export type GameId = RoomSnapshot['game'];
 export const games={storm:{title:'Storm Deck',instructions:'Empty your hand first. Match an element or play a neighbouring number on either pile, then keep the streak going. Drawing feeds the storm.',max:8},pyramid:{title:'Pyramid',instructions:'Memorize four cards, then make others drink with a match, or bluff. Called bluffs cost double. Any drink counts, water too.',max:8},kings:{title:'Kings Cup',instructions:'Take turns pulling a card and do what it says. The fourth king drinks the cup. Any drink counts, water too.',max:8},settlers:{title:'Island Settlers',instructions:'Place two settlements and roads, then roll, build and trade. Earn development cards, the longest road and the strongest army. First to ten points wins.',max:4},quiz:{title:'Quiz Volt',instructions:'Every round brings a new theme and new rules. Pick a power, answer on your phone, and watch the TV for the answer.',max:12},reaction:{title:'Reaction Duel',instructions:'A standoff. Wait for the signal, then tap or shake your phone. The slowest falls, until one is left standing.',max:8}};
@@ -8,7 +9,7 @@ export const drinking=(game:GameId)=>game==='pyramid'||game==='kings';
 export const scoreText=(game:GameId,score:number)=>drinking(game)?Math.abs(score)+(score===-1?' sip':' sips'):score+' pts';
 export const avatars=['🦊','🐼','🐸','🐙','🐯','🐨','🐧','🐱'];
 export const colors=['#c3f76a','#bc96ff','#ffae65','#ff83b1','#69dafa','#ffdf75'];
-export type Player={bot?:boolean,standIn?:boolean,early?:boolean,reactionMs?:number,gained?:number,id:string,name:string,color:string,avatar:string,score:number,ready:boolean,connected:boolean,answered:boolean};
+export type Player={bot?:boolean,difficulty?:Difficulty,standIn?:boolean,early?:boolean,reactionMs?:number,gained?:number,id:string,name:string,color:string,avatar:string,score:number,ready:boolean,connected:boolean,answered:boolean};
 export type Room={cheers:{n:number,from:string,emoji:string}[],quiz?:QuizView,duel?:DuelView,pausedAt:number,pyramid?:PyramidView,kings?:KingsView,storm?:StormView,island?:import('../island/board').BoardView,revealing?:boolean,correct?:number|null,code:string,game:GameId,round:number,rounds:number,tiebreak:boolean,contenders:string[],phase:'lobby'|'playing'|'paused'|'results'|'ended',question:{text:string,options:string[]}|null,deadline:number,signalAt:number|null,serverTime:number,players:Player[]};
 export type Seat={code:string,token:string,game?:string,id?:string};
 export const hostKey='playtogether.host';
