@@ -67,7 +67,15 @@ export type Room = {
   // Quiz questions this room has had, so a rematch brings new ones.
   asked?: string[];
   // Phones asking for a seat back mid-match, until the host answers. `joinId` is the asking phone's secret.
-  claims?: { id: string; joinId: string; seat: string; avatar: string; seen: number; refused?: boolean }[];
+  claims?: {
+    id: string;
+    joinId: string;
+    seat: string;
+    avatar: string;
+    code: string;
+    seen: number;
+    refused?: boolean;
+  }[];
   botAt?: number;
   island?: Island;
   pyramid?: Pyramid;
@@ -84,12 +92,14 @@ const connected = (p: Player, now: number) => !!p.bot || now - p.lastSeen < 2500
 // A request for a seat goes away once its phone stops repeating it for this long.
 const claimMs = 25000;
 const freshClaims = (r: Room, now: number) => (r.claims ?? []).filter((c) => now - c.seen < claimMs);
-// Open requests per seat. A fourth drops the oldest, so a room code alone cannot keep the owner out.
-const claimsPerSeat = 3;
-// Refusals count too: a seat whose host refused this many phones waits until they expire.
-const refusalsPerSeat = 3;
-// Stored requests per room, refused ones included.
-const claimsPerRoom = 12;
+// Requests a room stores, refused ones included. Refused ones make way first. Open ones are never dropped for
+// another, so asking cannot push the real player's request out, and refusals never lock a seat.
+const claimsPerRoom = 20;
+const codeLetters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+// Shown on the asking phone and to the host, so the host can check whose request it is. Unlike an avatar, only
+// that phone knows it.
+const claimCode = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(4)), (v) => codeLetters[v % codeLetters.length]).join('');
 // Requests the host can still answer: their seat is still quiet.
 const openClaims = (r: Room, now: number) =>
   freshClaims(r, now).filter((c) => {
@@ -308,24 +318,22 @@ function claimSeat(r: Room, seat: Player, joinId: string | undefined, avatar: st
   if (!joinId) throw new GameError('Ask the host to let you back in.', 409);
   // One open request per phone: asking for another seat replaces the one before.
   r.claims = freshClaims(r, now).filter((c) => c.joinId !== joinId || c.seat === seat.id || c.refused);
-  const claim = r.claims.find((c) => c.joinId === joinId && c.seat === seat.id);
+  const claim = r.claims.find((c) => c.joinId === joinId && c.seat === seat.id && !c.refused);
   if (claim) {
     // Repeats only refresh the request now and then, so a waiting phone barely writes the room.
     const dirty = now - claim.seen > 5000 || claim.avatar !== avatar;
     if (dirty) Object.assign(claim, { seen: now, avatar });
-    return { dirty, extras: {}, pending: true };
+    return { dirty, extras: { claimCode: claim.code }, pending: true };
   }
-  const forSeat = r.claims.filter((c) => c.seat === seat.id);
-  if (forSeat.filter((c) => c.refused).length >= refusalsPerSeat)
-    throw new GameError('Too many phones are asking for this seat. Try again soon.', 409);
-  const open = forSeat.filter((c) => !c.refused);
-  if (open.length >= claimsPerSeat) r.claims = r.claims.filter((c) => c !== open[0]);
   if (r.claims.length >= claimsPerRoom) {
-    const oldest = r.claims.find((c) => c.refused) ?? r.claims[0];
-    r.claims = r.claims.filter((c) => c !== oldest);
+    const refused = r.claims.find((c) => c.refused);
+    if (!refused) throw new GameError('Too many phones are asking for seats. Ask the host.', 409);
+    r.claims = r.claims.filter((c) => c !== refused);
   }
-  r.claims.push({ id: crypto.randomUUID(), joinId, seat: seat.id, avatar, seen: now });
-  return { dirty: true, extras: {}, pending: true };
+  let code = claimCode();
+  while (r.claims.some((c) => c.code === code)) code = claimCode();
+  r.claims.push({ id: crypto.randomUUID(), joinId, seat: seat.id, avatar, code, seen: now });
+  return { dirty: true, extras: { claimCode: code }, pending: true };
 }
 
 function textField(value: unknown, max: number, label: string): string {
@@ -361,10 +369,18 @@ export function mutate(
       return { dirty: true, extras: { playerId: again.id, playerToken: again.token } };
     }
     const dropped = r.players.find((p) => p.name.toLowerCase() === wanted && !connected(p, now));
-    // A refusal holds for that join id and seat. The phone asks again with a new id.
-    const refused = joinId ? freshClaims(r, now).find((c) => c.joinId === joinId && c.refused) : undefined;
-    if (refused && (!dropped || dropped.id === refused.seat))
-      throw new GameError('The host did not give you this seat.', 403);
+    // A refusal answers that join id for the seat it asked for, under its nickname, even once the seat went to
+    // another phone. It lasts 25 s, or less when a full room makes way for new requests. The phone asks again
+    // with a new id.
+    const refused = joinId
+      ? freshClaims(r, now).some(
+          (c) =>
+            c.joinId === joinId &&
+            c.refused &&
+            r.players.find((p) => p.id === c.seat)?.name.toLowerCase() === wanted,
+        )
+      : false;
+    if (refused) throw new GameError('The host did not give you this seat.', 403);
     if (dropped && r.phase !== 'lobby' && r.phase !== 'ended') {
       const avatar = textField(command.avatar ?? '🎮', 32, 'avatar');
       const claimed = claimSeat(r, dropped, joinId, avatar, now);
@@ -668,7 +684,7 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
     cheers: (r.cheers ?? [])
       .filter((c) => now - c.at < cheerMs)
       .map(({ n, from, emoji }) => ({ n, from, emoji })),
-    claims: host ? openClaims(r, now).map(({ id, seat, avatar }) => ({ id, seat, avatar })) : [],
+    claims: host ? openClaims(r, now).map(({ id, seat, avatar, code }) => ({ id, seat, avatar, code })) : [],
     players: r.players.map((p) => ({
       bot: p.bot,
       standIn: p.standIn,

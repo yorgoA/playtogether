@@ -334,10 +334,12 @@ contenders: z.array(z.string()),
     // Recent reactions, numbered so a screen shows each one once.
     cheers: z.array(z.object({ n: z.number().int(), from: z.string(), emoji: z.string() }).strict()),
     players: z.array(Player),
-    // Phones asking for a seat back mid-match: `seat` is a player id and `avatar` the one the asking
-  // phone sent with its join, so the host can tell several requests for one seat apart. Only the
-  // host screen sees them.
-    claims: z.array(z.object({ id: z.string(), seat: z.string(), avatar: z.string() }).strict()),
+    // Phones asking for a seat back mid-match. Only the host screen sees them. `seat` is a player id, `avatar`
+    // the one the asking phone sent, and `code` the one that phone shows (`claimCode` in its join reply), so
+    // the host can check whose request it is: an avatar can be copied, a code cannot.
+    claims: z.array(
+      z.object({ id: z.string(), seat: z.string(), avatar: z.string(), code: z.string() }).strict(),
+    ),
   })
   .strict();
 export type RoomSnapshot = z.infer<typeof RoomSnapshot>;
@@ -354,5 +356,7 @@ export const RoomResponse = z
     playerToken: z.string().optional(),
     // A join for a seat taken mid-match: the host has yet to agree. Repeat the join with the same `joinId`.
     pending: z.literal(true).optional(),
+    // With `pending`: the code to show on the waiting phone, which the host sees beside the request.
+    claimCode: z.string().optional(),
   })
   .strict();
