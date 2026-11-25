@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { difficulties } from '../bots/rules';
 import { cheerEmoji } from '../quiz/rules';
 
 // The room API, described once. The server checks requests against the command schemas, and the tests check
@@ -15,7 +16,9 @@ export const adultGames: readonly string[] = ['pyramid', 'kings'];
 export const resources = ['timber', 'clay', 'grain', 'wool', 'ore'] as const;
 export const devCards = ['knight', 'roads', 'bounty', 'monopoly', 'victory'] as const;
 export const pieces = ['road', 'settlement', 'city'] as const;
+export { botSeats, difficulties, type Difficulty } from '../bots/rules';
 const Game = z.enum(gameIds);
+const Difficulty = z.enum(difficulties);
 const Resource = z.enum(resources);
 const Piece = z.enum(pieces);
 const DevCard = z.enum(devCards);
@@ -113,7 +116,8 @@ const playerCommands = [
 const hostCommands = [
   z.object({ action: z.literal('kingsNext'), seq: z.number().int() }),
   z.object({ action: z.literal('pyramidFlip'), index: z.number().int() }),
-  nothing('addBot'),
+  // Normal unless the host picks another level.
+  z.object({ action: z.literal('addBot'), difficulty: Difficulty.optional() }),
   nothing('start'),
   nothing('restart'),
   nothing('pause'),
@@ -136,6 +140,8 @@ export const ErrorResponse = z.object({ error: z.string() }).strict();
 const Player = z
   .object({
     bot: z.boolean().optional(),
+    // Bots only.
+    difficulty: Difficulty.optional(),
     standIn: z.boolean().optional(),
     early: z.boolean().optional(),
     id: z.string(),

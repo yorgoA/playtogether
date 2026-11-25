@@ -1,4 +1,4 @@
-import type { StormView } from '../contract';
+import type { Difficulty, StormView } from '../contract';
 import { elements, fits, highest, isPower, stormLimit } from '../storm/rules';
 import type { GameModule } from './engine';
 import { GameError } from './games';
@@ -163,6 +163,73 @@ export function stormView(s: Storm, viewer?: string): StormView {
   };
 }
 
+// How many cards a streak starting with `card` can lay down, looking a few cards ahead. The budget caps the
+// search, which grows fast with a big hand, and every request a bot plays in pays for it.
+function streakFrom(card: string, rest: string[], budget = { left: 1000 }, depth = 4): number {
+  let longest = 0;
+  if (depth)
+    for (const next of new Set(rest))
+      if (budget.left-- > 0 && fits(next, card, true)) {
+        const left = [...rest];
+        left.splice(left.indexOf(next), 1);
+        longest = Math.max(longest, streakFrom(next, left, budget, depth - 1));
+      }
+  return 1 + longest;
+}
+
+// Plays from what its seat may see: its own hand and the table, never the deck or other hands.
+// Easy slips one turn in three, drawing or ending its streak early. Normal plays the first card that fits.
+// Hard starts the longest streak it can, blows a Gust at any rival down to two cards, and gives away a card
+// that fits neither pile. When nothing fits, every level plays a Gust or a Calm before drawing, so no bot holds
+// one forever. Normal and hard also take a win in one move: a Gust that gives away their last other card.
+export function stormBot(v: StormView, id: string, level: Difficulty): Record<string, unknown> {
+  const hand = v.hand ?? [];
+  const send = (command: Record<string, unknown>) => ({ ...command, seq: v.seq });
+  const options = ([0, 1] as const)
+    .filter((pile) => v.streak === null || pile === v.streak)
+    .flatMap((pile) =>
+      hand.filter((card) => fits(card, v.piles[pile], v.streak !== null)).map((card) => ({ card, pile })),
+    );
+  // Once per card: the same card is worth the same on either pile.
+  const lengths = new Map<string, number>();
+  const length = ({ card }: { card: string }) => {
+    if (!lengths.has(card)) {
+      const rest = [...hand];
+      rest.splice(rest.indexOf(card), 1);
+      lengths.set(card, streakFrom(card, rest));
+    }
+    return lengths.get(card)!;
+  };
+  const best =
+    level === 'hard' ? options.reduce((a, b) => (length(b) > length(a) ? b : a), options[0]) : options[0];
+  const slip = level === 'easy' && Math.random() < 1 / 3;
+  if (v.streak !== null) return send(best && !slip ? { move: 'play', ...best } : { move: 'end' });
+
+  const rivals = v.order.filter((other) => other !== id);
+  const leader = rivals.reduce((a, b) => (v.sizes[b] < v.sizes[a] ? b : a), rivals[0]);
+  const gust = () => {
+    if (hand.length === 1) return send({ move: 'play', card: 'G' });
+    const others = [...hand];
+    others.splice(others.indexOf('G'), 1);
+    const useless = others.find(
+      (card) => !isPower(card) && !fits(card, v.piles[0], false) && !fits(card, v.piles[1], false),
+    );
+    return send({
+      move: 'play',
+      card: 'G',
+      target: leader,
+      give: (level === 'hard' && useless) || others[0],
+    });
+  };
+  if (level !== 'easy' && hand.includes('G') && hand.length === 2) return gust();
+  if (level === 'hard' && hand.includes('G') && hand.length > 1 && v.sizes[leader] <= 2) return gust();
+  if (slip) return send({ move: 'draw' });
+  if (best) return send({ move: 'play', ...best });
+  if (hand.includes('G')) return gust();
+  if (hand.includes('C')) return send({ move: 'play', card: 'C' });
+  return send({ move: 'draw' });
+}
+
 export const stormModule: GameModule<Storm, StormView> = {
   game: 'storm',
   action: 'storm',
@@ -172,6 +239,7 @@ export const stormModule: GameModule<Storm, StormView> = {
   move: stormMove,
   timeout: stormTimeout,
   turn: (s) => s.turn,
+  bot: (s, id, level) => stormBot(stormView(s, id), id, level),
   leave: leaveStorm,
   over: stormOver,
   score: stormScore,
