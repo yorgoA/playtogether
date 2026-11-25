@@ -133,6 +133,11 @@ const View = nothing('view');
 export const RoomCommand = z.discriminatedUnion('action', [...playerCommands, ...hostCommands, View]);
 export type RoomCommand = z.infer<typeof RoomCommand>;
 
+// ---- Live rooms: GET /api/rooms/:code/live opens a WebSocket ------------------------------------------
+
+// The first and only message a screen sends on it: its player or host token, kept out of the URL.
+export const LiveHello = z.object({ token: z.string().max(60) }).strict();
+
 // ---- Responses -----------------------------------------------------------------------------------------
 
 export const ErrorResponse = z.object({ error: z.string() }).strict();
@@ -341,6 +346,8 @@ contenders: z.array(z.string()),
   })
   .strict();
 export type RoomSnapshot = z.infer<typeof RoomSnapshot>;
+// What a live room pushes: the same view a GET returns, each time the room changes, or why it closes.
+export const LiveMessage = z.union([z.object({ room: RoomSnapshot }).strict(), ErrorResponse]);
 
 // 201 for POST /api/rooms. `hostToken` goes only to the host screen that created the room.
 export const CreateRoomResponse = z

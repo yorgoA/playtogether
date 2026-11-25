@@ -160,6 +160,22 @@ function advanceBots(r: Room, now: number) {
   }
   return false;
 }
+// How long a room lives after its last change.
+export const roomTtlMs = 24 * 60 * 60 * 1000;
+// Whether a token opens this room: the host's, or a player's.
+export const knows = (r: Room, token: string) =>
+  !!token && (token === r.hostToken || r.players.some((p) => p.token === token));
+// Marks the players behind these tokens as still here, like a request from their phone would. Returns whether
+// that changed anything worth saving: a phone's own requests refresh it at most every 6.5 s too.
+export function stillHere(r: Room, tokens: string[], now: number) {
+  let changed = false;
+  for (const p of r.players)
+    if (tokens.includes(p.token) && now - p.lastSeen >= 6500) {
+      p.lastSeen = now;
+      changed = true;
+    }
+  return changed;
+}
 // Moves the room on to `now` with no player acting: deadlines, bots and races. Returns whether it changed.
 export function tick(r: Room, now: number) {
   const moved = advance(r, now);
