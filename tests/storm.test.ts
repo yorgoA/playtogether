@@ -131,6 +131,37 @@ describe('Storm Deck', () => {
     expect(room.phase).toBe('results');
   });
 
+  it('keeps the clock when someone else leaves, and counts from the pause when the turn moves', () => {
+    const { s, ids, room, host, ping } = match(4);
+    const due = room.deadline;
+    ping(0, T0 + DROP);
+    host({ action: 'kick', playerId: ids[3] }, T0 + DROP);
+    expect(s.turn).toBe(ids[0]);
+    expect(room.deadline).toBe(due);
+    host({ action: 'pause' }, T0 + DROP + 1000);
+    host({ action: 'kick', playerId: ids[0] }, T0 + DROP * 2 + 5000);
+    expect(s.turn).toBe(ids[1]);
+    expect(room.phase).toBe('paused');
+    expect(room.deadline).toBe(T0 + DROP + 1000 + turnMs);
+  });
+
+  it('refuses moves outside a match', () => {
+    const fails = (run: () => unknown) => {
+      try {
+        run();
+      } catch (e) {
+        return e;
+      }
+    };
+    const lobby = table('storm', 2);
+    const quiz = table('quiz', 2);
+    for (const { play } of [lobby, quiz])
+      expect(fails(() => play(0, { action: 'storm', move: 'draw', seq: 0 }))).toMatchObject({
+        status: 409,
+        message: 'Storm Deck is not active.',
+      });
+  });
+
   it('ends when nobody can draw or play', () => {
     const { s, room, move } = match(2);
     s.deck = [];
