@@ -5,7 +5,7 @@
 export const maxTiebreaks = 3;
 
 export type RoundRoom = {
-  players: { id: string; score: number }[];
+  players: { id: string; score: number; bot?: boolean }[];
   round: number;
   // Chosen in the lobby. Tie-break rounds are counted apart so a rematch keeps the choice.
   rounds: number;
@@ -31,7 +31,9 @@ export function tiedForFirst(r: RoundRoom) {
 // Called once the last round is over. `playable` is false when the game has nothing left for another round.
 export function addTiebreak(r: RoundRoom, playable = true) {
   const tied = tiedForFirst(r);
-  if (!playable || (r.tiebreaks ?? 0) >= maxTiebreaks || !tied.length) return false;
+  // Nobody should watch bots play up to three rounds: bots tied alone share the win.
+  if (!playable || (r.tiebreaks ?? 0) >= maxTiebreaks || !tied.length || tied.every((p) => p.bot))
+    return false;
   r.tiebreaks = (r.tiebreaks ?? 0) + 1;
   r.contenders = tied.map((p) => p.id);
   return true;

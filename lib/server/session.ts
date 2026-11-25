@@ -1,4 +1,13 @@
-import { advanceDuel, bangWhenAllShot, duelView, leaveDuel, rearm, startDuel, type Duel } from './duel';
+import {
+  advanceDuel,
+  bangWhenAllShot,
+  duelBots,
+  duelView,
+  leaveDuel,
+  rearm,
+  startDuel,
+  type Duel,
+} from './duel';
 import { roundChoices } from '../quiz/rounds';
 import { GameError, games, type Game } from './games';
 import {
@@ -6,6 +15,7 @@ import {
   answerQuiz,
   choosePower,
   hurryQuiz,
+  quizBots,
   quizView,
   quizWakes,
   startQuiz,
@@ -213,6 +223,17 @@ function advance(r: Room, now: number) {
     return !!poured;
   }
   if (r.phase !== 'playing') return false;
+  // Bots act first, so an answer planned before the deadline still counts.
+  const { bots } = context(r, now);
+  let acted = false;
+  if (r.quiz && quizBots(r, bots, now)) {
+    hurryQuiz(r, (p) => connected(p as Player, now), now);
+    acted = true;
+  }
+  if (r.duel && duelBots(r, bots, now)) {
+    bangWhenAllShot(r, now);
+    acted = true;
+  }
   const moved = r.quiz
     ? advanceQuiz(r, (p) => connected(p as Player, now), now)
     : r.duel
@@ -225,7 +246,7 @@ function advance(r: Room, now: number) {
     r.deadline = 0;
     return true;
   }
-  return moved;
+  return moved || acted;
 }
 function lobby(r: Room) {
   r.revealing = false;
