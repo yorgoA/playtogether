@@ -1,7 +1,7 @@
 import type { QuizPower, QuizType, QuizView } from '../contract/rooms';
 import { crossOutAt, introMs, powerMs, quizPowers, quizTypes, revealMs, suspenseMs } from '../quiz/rules';
 import { GameError } from './games';
-import { maxTiebreaks, totalRounds } from './rounds';
+import { contends, maxTiebreaks, totalRounds } from './rounds';
 import { ownQuestions, type Question } from './trivia';
 
 export type QuizRound = { theme: string; type: QuizType; text: string; options: string[]; correct: number };
@@ -30,6 +30,7 @@ export type QuizRoom = {
   round: number;
   rounds: number;
   tiebreaks?: number;
+  contenders?: string[];
   started: number;
   deadline: number;
   revealing?: boolean;
@@ -56,6 +57,8 @@ export function dealPowers(rounds: number, players: number): QuizPower[] {
   // Alone, there is nobody to aim at or be hit by.
   return players > 1 ? kit : kit.filter((p) => !quizPowers[p].target && p !== 'mirror');
 }
+
+const safeTypes = (Object.keys(quizTypes) as QuizType[]).filter((t) => t !== 'minefield');
 
 function dealRounds(count: number, supply: Question[], asked: string[]): QuizRound[] {
   const seen = new Set(asked);
@@ -92,7 +95,10 @@ export function startQuiz(r: QuizRoom, supply: Question[], now: number) {
   const spares = Math.max(0, Math.min(maxTiebreaks, pool.length - r.rounds));
   const dealt = dealRounds(r.rounds + spares, pool, asked);
   const planned = dealt.slice(0, r.rounds);
-  const spare = dealt.slice(r.rounds);
+  // A tie-break takes no points away, and Minefield does.
+  const spare = dealt
+    .slice(r.rounds)
+    .map((q) => (q.type === 'minefield' ? { ...q, type: shuffle(safeTypes)[0] } : q));
   r.asked = [...asked, ...planned.map((q) => q.text)].slice(-100);
   const kit = dealPowers(r.rounds, r.players.length);
   r.quiz = {
@@ -171,7 +177,7 @@ function cutoff(r: QuizRoom, id: string) {
 // Skips the wait once everyone who is still here has acted.
 export function hurryQuiz(r: QuizRoom, here: (p: Seat) => boolean, now: number) {
   const q = r.quiz!;
-  const waiting = r.players.filter(here);
+  const waiting = r.players.filter((p) => here(p) && contends(r, p.id));
   if (!waiting.length) return;
   if (q.stage === 'power' && waiting.every((p) => q.chosen[p.id] || !q.hands[p.id]?.length))
     toQuestion(r, now);
@@ -228,6 +234,8 @@ function earnings(r: QuizRoom): Record<string, number> {
       }
     }
   }
+  // Bystanders watch a tie-break: nothing they pick can score.
+  for (const id of ids) if (!contends(r, id)) gains[id] = 0;
   return gains;
 }
 
@@ -241,7 +249,7 @@ export function advanceQuiz(r: QuizRoom, here: (p: Seat) => boolean, now: number
     return q.stage !== before;
   }
   if (q.stage === 'intro') {
-    if (r.players.some((p) => q.hands[p.id]?.length)) enter(r, 'power', now, powerMs);
+    if (r.round <= r.rounds && r.players.some((p) => q.hands[p.id]?.length)) enter(r, 'power', now, powerMs);
     else toQuestion(r, now);
   } else if (q.stage === 'power') toQuestion(r, now);
   else if (q.stage === 'question') toSuspense(r, now);
@@ -260,6 +268,7 @@ export function advanceQuiz(r: QuizRoom, here: (p: Seat) => boolean, now: number
 
 export function choosePower(r: QuizRoom, id: string, command: Record<string, unknown>) {
   const q = r.quiz!;
+  if (r.round > r.rounds) throw new GameError('There are no powers in a tie-break.', 409);
   if (q.stage !== 'power' || command.round !== r.round)
     throw new GameError('Powers are closed for this round.', 409);
   if (q.chosen[id]) return;
@@ -278,6 +287,7 @@ export function choosePower(r: QuizRoom, id: string, command: Record<string, unk
 export function answerQuiz(r: QuizRoom, p: Seat, command: Record<string, unknown>, now: number) {
   const q = r.quiz!;
   if (q.stage !== 'question' || command.round !== r.round) throw new GameError('This round is closed.', 409);
+  if (!contends(r, p.id)) throw new GameError('Only the players tied for first play the tie-break.', 403);
   if (p.answered) return;
   const { value } = command;
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 3)

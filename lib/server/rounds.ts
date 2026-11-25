@@ -5,23 +5,34 @@
 export const maxTiebreaks = 3;
 
 export type RoundRoom = {
-  players: { score: number }[];
+  players: { id: string; score: number }[];
   round: number;
   // Chosen in the lobby. Tie-break rounds are counted apart so a rematch keeps the choice.
   rounds: number;
   tiebreaks?: number;
+  // Who may still win once tie-breaks start: the players tied for first, then those still level.
+  contenders?: string[];
 };
 
 export const totalRounds = (r: RoundRoom) => r.rounds + (r.tiebreaks ?? 0);
 
-export function tiedForFirst(players: { score: number }[]) {
-  const top = Math.max(...players.map((p) => p.score));
-  return players.filter((p) => p.score === top).length > 1;
+// Whether this player scores and answers in the rounds being played. Everyone does until a tie-break starts.
+export const contends = (r: { contenders?: string[] }, id: string) =>
+  !r.contenders || r.contenders.includes(id);
+
+// The players tied for first place, or none when one leads. Only contenders count once a tie-break started.
+export function tiedForFirst(r: RoundRoom) {
+  const field = r.players.filter((p) => contends(r, p.id));
+  const top = Math.max(...field.map((p) => p.score));
+  const tied = field.filter((p) => p.score === top);
+  return tied.length > 1 ? tied : [];
 }
 
 // Called once the last round is over. `playable` is false when the game has nothing left for another round.
 export function addTiebreak(r: RoundRoom, playable = true) {
-  if (!playable || (r.tiebreaks ?? 0) >= maxTiebreaks || !tiedForFirst(r.players)) return false;
+  const tied = tiedForFirst(r);
+  if (!playable || (r.tiebreaks ?? 0) >= maxTiebreaks || !tied.length) return false;
   r.tiebreaks = (r.tiebreaks ?? 0) + 1;
+  r.contenders = tied.map((p) => p.id);
   return true;
 }

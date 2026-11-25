@@ -59,6 +59,8 @@ export type Room = {
   rounds: number;
   round: number;
   tiebreaks?: number;
+  // Set when the first tie-break starts: the players tied for first, then those still level.
+  contenders?: string[];
   quiz?: Quiz;
   duel?: Duel;
   cheers?: { n: number; from: string; emoji: string; at: number }[];
@@ -175,6 +177,7 @@ function lobby(r: Room) {
   r.phase = 'lobby';
   r.round = 0;
   delete r.tiebreaks;
+  delete r.contenders;
   r.deadline = 0;
   r.signalAt = 0;
   delete r.quiz;
@@ -210,6 +213,15 @@ function removePlayer(r: Room, p: Player, now: number) {
   if (!r.players.length) {
     lobby(r);
     return;
+  }
+  if (r.contenders) {
+    r.contenders = r.contenders.filter((id) => id !== p.id);
+    // The last contender standing wins at once.
+    if (r.contenders.length < 2) {
+      r.phase = 'results';
+      r.deadline = 0;
+      return;
+    }
   }
   if (r.pyramid) {
     const claim = r.pyramid.claim;
@@ -556,6 +568,7 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
     round: r.round,
     // Only tie-breaks take a match past the rounds chosen in the lobby, where the round is 0.
     tiebreak: r.round > r.rounds,
+    contenders: r.contenders ?? [],
     deadline: r.deadline,
     signalAt,
     serverTime: now,
