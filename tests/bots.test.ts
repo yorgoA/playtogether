@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { difficulties, type StormView } from '../lib/contract';
+import { botName, botNames } from '../lib/server/bots';
+import { botDelayMs } from '../lib/server/engine';
+import { snapshot } from '../lib/server/session';
 import { newStorm, stormBot, stormMove, stormOver, stormView } from '../lib/server/storm';
+import { T0, table as room } from './helpers';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -79,5 +83,65 @@ describe('Storm Deck bots', () => {
     for (let moves = 0; !stormOver(s) && moves < 5000; moves++)
       stormMove(s, s.turn, stormBot(stormView(s, s.turn), s.turn, level));
     expect(stormOver(s)).toBe(true);
+  });
+});
+
+describe('bot seats', () => {
+  it('seat up to three bots at a Storm Deck table, each with its level and its own name', () => {
+    const { room: r, host } = room('storm', 1);
+    host({ action: 'addBot', difficulty: 'hard' });
+    host({ action: 'addBot' });
+    host({ action: 'addBot', difficulty: 'easy' });
+    const bots = r.players.filter((p) => p.bot);
+    expect(bots.map((p) => p.difficulty)).toEqual(['hard', 'normal', 'easy']);
+    expect(new Set(bots.map((p) => p.name.toLowerCase())).size).toBe(3);
+    for (const bot of bots) expect(bot).toMatchObject({ avatar: '🤖', name: expect.toBeOneOf(botNames) });
+    expect(() => host({ action: 'addBot' })).toThrow('No bot seat available.');
+    expect(snapshot(r, T0, r.hostToken).players[1]).toMatchObject({ bot: true, difficulty: 'hard' });
+  });
+
+  it('never seat more players than the game takes', () => {
+    const { host } = room('storm', 7);
+    host({ action: 'addBot' });
+    expect(() => host({ action: 'addBot' })).toThrow('No bot seat available.');
+  });
+
+  it('are refused in games without a bot, outside the lobby, or at an unknown level', () => {
+    for (const game of ['quiz', 'reaction', 'kings', 'pyramid'])
+      expect(() => room(game, 1).host({ action: 'addBot' })).toThrow('has no bots yet.');
+    const { host } = room('storm', 1);
+    expect(() => host({ action: 'addBot', difficulty: 'genius' })).toThrow('Choose easy, normal or hard.');
+    host({ action: 'addBot' });
+    host({ action: 'start' });
+    expect(() => host({ action: 'addBot' })).toThrow('Add bots in the lobby.');
+  });
+
+  it('never start a match without a phone at the table', () => {
+    const { host } = room('storm', 0);
+    host({ action: 'addBot' });
+    host({ action: 'addBot' });
+    expect(() => host({ action: 'start' })).toThrow('Join with a phone before starting.');
+  });
+
+  it('get numbered names once every bot name is taken', () => {
+    expect(botName([...botNames, 'BOT 1'])).toBe('Bot 2');
+  });
+
+  it('play their Storm Deck turn a moment after it starts', () => {
+    const { room: r, host } = room('storm', 1);
+    host({ action: 'addBot' });
+    host({ action: 'start' });
+    const s = r.storm!;
+    const bot = r.players[1].id;
+    s.order = [bot, r.players[0].id];
+    s.turn = bot;
+    // A card that fits, so a play proves the bot chose it: running out of time can only draw.
+    s.piles = ['E3', 'T7'];
+    s.hands[bot] = ['E4', 'F1'];
+    host({ action: 'view' }, T0 + botDelayMs - 1);
+    expect(s.seq).toBe(0);
+    host({ action: 'view' }, T0 + botDelayMs);
+    expect(s.seq).toBe(1);
+    expect(s.event).toMatchObject({ kind: 'play', by: bot, card: 'E4', pile: 0 });
   });
 });

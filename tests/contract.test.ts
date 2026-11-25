@@ -64,6 +64,7 @@ describe('what the screens send is accepted', () => {
     ...['addBot', 'start', 'restart', 'pause', 'resume', 'lobby', 'end', 'view'].map((action) => ({
       action,
     })),
+    { action: 'addBot', difficulty: 'hard' },
     { action: 'configure', game: 'reaction' },
     { action: 'configure', rounds: 7 },
     { action: 'kick', playerId: 'abc' },

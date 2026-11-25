@@ -3,7 +3,8 @@ import { roundChoices } from '../quiz/rounds';
 import { GameError, games, type Game } from './games';
 import { advanceQuiz, answerQuiz, choosePower, hurryQuiz, quizView, startQuiz, type Quiz } from './quiz';
 import type { Question } from './trivia';
-import { gameIds, type Difficulty, type RoomSnapshot } from '../contract';
+import { botSeats, gameIds, type Difficulty, type RoomSnapshot } from '../contract';
+import { botColors, botLevel, botName } from './bots';
 import { claimPyramid, flipPyramid, newPyramid, pyramidView, resolvePyramid, type Pyramid } from './pyramid';
 import {
   kingsMove,
@@ -422,21 +423,20 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
   } else if (host) {
     switch (action) {
       case 'addBot': {
-        if (r.game !== 'settlers' || r.phase !== 'lobby')
-          throw new GameError('Add bots in the Island Settlers lobby.');
-        if (r.players.length >= 4 || r.players.filter((p) => p.bot).length >= 3)
+        const seats = botSeats[r.game];
+        if (!seats) throw new GameError(games[r.game].name + ' has no bots yet.');
+        if (r.phase !== 'lobby') throw new GameError('Add bots in the lobby.');
+        if (r.players.length >= games[r.game].maxPlayers || r.players.filter((p) => p.bot).length >= seats)
           throw new GameError('No bot seat available.');
-        let n = 1;
-        while (r.players.some((p) => p.name.toLowerCase() === 'bot ' + n)) n++;
+        const difficulty = botLevel(command.difficulty);
         r.players.push({
           id: crypto.randomUUID(),
           token: crypto.randomUUID(),
           bot: true,
-          name: 'Bot ' + n,
+          difficulty,
+          name: botName(r.players.map((p) => p.name)),
           avatar: '🤖',
-          color: ['#bc96ff', '#ffae65', '#69dafa', '#c3f76a'].find(
-            (c) => !r.players.some((p) => p.color === c),
-          )!,
+          color: botColors.find((c) => !r.players.some((p) => p.color === c)) ?? botColors[0],
           ready: true,
           lastSeen: now,
           score: 0,
@@ -583,6 +583,7 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
       .map(({ n, from, emoji }) => ({ n, from, emoji })),
     players: r.players.map((p) => ({
       bot: p.bot,
+      difficulty: p.difficulty,
       standIn: p.standIn,
       early: shotsShown || p === viewer ? p.early : undefined,
       id: p.id,
