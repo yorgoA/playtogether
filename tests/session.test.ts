@@ -130,13 +130,17 @@ describe('repeating a join', () => {
 });
 
 describe('taking a seat back mid-match', () => {
-  const ask = (room: Parameters<typeof mutate>[0], joinId?: string, now = T0 + DROP) =>
-    mutate(room, { action: 'join', name: ' p1 ', joinId }, '', now);
+  const ask = (
+    room: Parameters<typeof mutate>[0],
+    joinId?: string,
+    now = T0 + DROP,
+    extra: Record<string, unknown> = {},
+  ) => mutate(room, { action: 'join', name: ' p1 ', joinId, ...extra }, '', now);
   const claims = (room: Parameters<typeof mutate>[0], now = T0 + DROP) =>
     snapshot(room, now, room.hostToken).claims;
   // P1's phone has gone quiet; P0's still polls.
-  function match() {
-    const t = table('quiz', 2);
+  function match(seats = 2) {
+    const t = table('quiz', seats);
     t.host({ action: 'start' });
     t.room.players[1].score = 700;
     t.ping(0, T0 + DROP);
@@ -202,10 +206,78 @@ describe('taking a seat back mid-match', () => {
     );
   });
 
-  it('lets only three phones ask for one seat at a time', () => {
+  it('keeps the seat a join id asks for, even when the phone changes its mind', () => {
+    const { room, host, seats } = match(3);
+    ask(room, 'new-phone-secret-1');
+    ask(room, 'new-phone-secret-1', T0 + DROP, { name: 'P2' });
+    // The request for P1 is replaced, not kept beside the new one.
+    const [claim, ...rest] = claims(room);
+    expect(rest).toEqual([]);
+    expect(claim.seat).toBe(seats[2].id);
+    host({ action: 'claim', id: claim.id, accept: true }, T0 + DROP);
+    const { extras } = ask(room, 'new-phone-secret-1', T0 + DROP, { name: 'P2' });
+    expect(extras.playerId).toBe(seats[2].id);
+    // Asking for P1 again with that id is a new request, not P1's seat.
+    expect(ask(room, 'new-phone-secret-1').pending).toBe(true);
+  });
+
+  it('shows the request for a seat even when the earlier seat came back first', () => {
+    const { room, ping, seats } = match(3);
+    ask(room, 'new-phone-secret-1');
+    ping(1, T0 + DROP + 1000);
+    ask(room, 'new-phone-secret-1', T0 + DROP + 1000, { name: 'P2' });
+    const [claim, ...rest] = claims(room, T0 + DROP + 1000);
+    expect(rest).toEqual([]);
+    expect(claim.seat).toBe(seats[2].id);
+  });
+
+  it('does not hand over a seat that is no longer quiet', () => {
+    const { room, host, ping, seats } = match();
+    ask(room, 'new-phone-secret-1');
+    const [claim] = claims(room);
+    ping(1, T0 + DROP + 1000);
+    expect(() => host({ action: 'claim', id: claim.id, accept: true }, T0 + DROP + 1000)).toThrow(
+      'That request has gone.',
+    );
+    expect(room.players[1].token).toBe(seats[1].token);
+    expect(room.players[1].joinId).not.toBe('new-phone-secret-1');
+  });
+
+  it('lets the owner through when three phones filled the seat, dropping the oldest', () => {
     const { room } = match();
     for (const n of [1, 2, 3]) ask(room, 'new-phone-secret-' + n);
+    expect(ask(room, 'owner-new-phone-1').pending).toBe(true);
+    expect(room.claims!.map((c) => c.joinId)).toEqual([
+      'new-phone-secret-2',
+      'new-phone-secret-3',
+      'owner-new-phone-1',
+    ]);
+    expect(claims(room)).toHaveLength(3);
+  });
+
+  it('counts refusals toward a per-seat limit', () => {
+    const { room, host } = match();
+    for (const n of [1, 2, 3]) {
+      ask(room, 'new-phone-secret-' + n);
+      host({ action: 'claim', id: claims(room)[0].id, accept: false }, T0 + DROP);
+    }
     expect(() => ask(room, 'new-phone-secret-4')).toThrow('Too many phones are asking for this seat.');
+    // Refusals expire, and then the seat can be asked for again.
+    expect(ask(room, 'new-phone-secret-4', T0 + DROP + 25_000).pending).toBe(true);
+  });
+
+  it('caps what a room stores, however many phones ask and are refused', () => {
+    const { room, host } = match(3);
+    for (let n = 0; n < 200; n++) {
+      try {
+        ask(room, 'spam-phone-secret-' + n, T0 + DROP, { name: n % 2 ? 'P1' : 'P2' });
+      } catch {
+        continue; // a seat with too many refusals turns the phone away
+      }
+      const open = room.claims!.find((c) => !c.refused && c.joinId === 'spam-phone-secret-' + n);
+      if (open) host({ action: 'claim', id: open.id, accept: false }, T0 + DROP);
+    }
+    expect(room.claims!.length).toBeLessThanOrEqual(12);
   });
 
   it('needs the phone to send a join id', () => {

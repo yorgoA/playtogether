@@ -84,8 +84,12 @@ const connected = (p: Player, now: number) => !!p.bot || now - p.lastSeen < 2500
 // A request for a seat goes away once its phone stops repeating it for this long.
 const claimMs = 25000;
 const freshClaims = (r: Room, now: number) => (r.claims ?? []).filter((c) => now - c.seen < claimMs);
-// Phones that may ask for the same seat at once, so a room code alone cannot flood the host screen.
+// Open requests per seat. A fourth drops the oldest, so a room code alone cannot keep the owner out.
 const claimsPerSeat = 3;
+// Refusals count too: a seat whose host refused this many phones waits until they expire.
+const refusalsPerSeat = 3;
+// Stored requests per room, refused ones included.
+const claimsPerRoom = 12;
 // Requests the host can still answer: their seat is still quiet.
 const openClaims = (r: Room, now: number) =>
   freshClaims(r, now).filter((c) => {
@@ -302,16 +306,28 @@ type Mutation = { dirty: boolean; extras: Record<string, string>; pending?: bool
 // repeats its join with the same id until then, and gets the seat back through it.
 function claimSeat(r: Room, seat: Player, joinId: string | undefined, now: number): Mutation {
   if (!joinId) throw new GameError('Ask the host to let you back in.', 409);
-  r.claims = freshClaims(r, now);
-  const claim = r.claims.find((c) => c.joinId === joinId);
-  // Repeats only refresh the request now and then, so a waiting phone barely writes to the room.
-  const dirty = !claim || now - claim.seen > 5000;
-  if (claim) claim.seen = dirty ? now : claim.seen;
-  else if (r.claims.filter((c) => c.seat === seat.id && !c.refused).length >= claimsPerSeat)
+  // One open request per phone: asking for another seat replaces the one before.
+  r.claims = freshClaims(r, now).filter((c) => c.joinId !== joinId || c.seat === seat.id || c.refused);
+  const claim = r.claims.find((c) => c.joinId === joinId && c.seat === seat.id);
+  if (claim) {
+    // Repeats only refresh the request now and then, so a waiting phone barely writes the room.
+    const dirty = now - claim.seen > 5000;
+    if (dirty) Object.assign(claim, { seen: now });
+    return { dirty, extras: {}, pending: true };
+  }
+  const forSeat = r.claims.filter((c) => c.seat === seat.id);
+  if (forSeat.filter((c) => c.refused).length >= refusalsPerSeat)
     throw new GameError('Too many phones are asking for this seat. Try again soon.', 409);
-  else r.claims.push({ id: crypto.randomUUID(), joinId, seat: seat.id, seen: now });
-  return { dirty, extras: {}, pending: true };
+  const open = forSeat.filter((c) => !c.refused);
+  if (open.length >= claimsPerSeat) r.claims = r.claims.filter((c) => c !== open[0]);
+  if (r.claims.length >= claimsPerRoom) {
+    const oldest = r.claims.find((c) => c.refused) ?? r.claims[0];
+    r.claims = r.claims.filter((c) => c !== oldest);
+  }
+  r.claims.push({ id: crypto.randomUUID(), joinId, seat: seat.id, seen: now });
+  return { dirty: true, extras: {}, pending: true };
 }
+
 function textField(value: unknown, max: number, label: string): string {
   if (typeof value !== 'string' || !value.trim() || value.trim().length > max)
     throw new GameError('Choose a valid ' + label + '.');
@@ -330,18 +346,22 @@ export function mutate(
   const extras: Record<string, string> = {};
   if (action === 'join') {
     const joinId = typeof command.joinId === 'string' ? command.joinId : undefined;
-    const again = joinId ? r.players.find((p) => p.joinId === joinId) : undefined;
+    const wanted = typeof command.name === 'string' ? command.name.trim().toLowerCase() : '';
+    // A phone asking for another seat than the one its join id holds is a new request.
+    const again = joinId
+      ? r.players.find((p) => p.joinId === joinId && (!wanted || p.name.toLowerCase() === wanted))
+      : undefined;
     if (again && r.phase !== 'ended') {
       // The same phone repeating a join. Both replies carry the same token, so either one works.
       again.lastSeen = now;
       again.standIn = undefined;
       return { dirty: true, extras: { playerId: again.id, playerToken: again.token } };
     }
-    // A refusal holds for this join id. The phone asks again with a new one.
-    if (joinId && freshClaims(r, now).some((c) => c.joinId === joinId && c.refused))
-      throw new GameError('The host did not give you this seat.', 403);
-    const wanted = typeof command.name === 'string' ? command.name.trim().toLowerCase() : '';
     const dropped = r.players.find((p) => p.name.toLowerCase() === wanted && !connected(p, now));
+    // A refusal holds for that join id and seat. The phone asks again with a new id.
+    const refused = joinId ? freshClaims(r, now).find((c) => c.joinId === joinId && c.refused) : undefined;
+    if (refused && (!dropped || dropped.id === refused.seat))
+      throw new GameError('The host did not give you this seat.', 403);
     if (dropped && r.phase !== 'lobby' && r.phase !== 'ended') {
       const claimed = claimSeat(r, dropped, joinId, now);
       return { ...claimed, dirty: dirty || claimed.dirty };
@@ -558,7 +578,10 @@ export function mutate(
           seat.joinId = claim.joinId;
           seat.lastSeen = now;
           seat.standIn = undefined;
-          r.claims = r.claims!.filter((c) => c !== claim);
+          // One phone holds one seat: its request for any other seat goes away with this one.
+          for (const other of r.players)
+            if (other !== seat && other.joinId === claim.joinId) other.joinId = undefined;
+          r.claims = r.claims!.filter((c) => c.joinId !== claim.joinId || c.refused);
           // Anyone else asking for the same seat is turned down. A refusal holds 25 s from now.
           for (const other of r.claims)
             if (other.seat === seat.id) Object.assign(other, { refused: true, seen: now });
