@@ -2,9 +2,12 @@ import type { Difficulty, DuelView } from '../contract/rooms';
 import { contends, totalRounds } from './rounds';
 
 // A standoff: everyone draws on the signal and the slowest falls, until one is left standing.
-// `aims` holds each bot's reaction for this draw, or null when it will jump the gun.
-export type Duel = DuelView & { wasted: number; aims?: Record<string, number | null> };
+// `aims` holds each bot's plan for this draw: its reaction time, or `early` when it jumps the gun.
+export type Aim = { ms: number } | { early: true };
+export type Duel = DuelView & { wasted: number; aims?: Record<string, Aim> };
 type Seat = {
+  bot?: boolean;
+  difficulty?: Difficulty;
   id: string;
   score: number;
   answered: boolean;
@@ -32,6 +35,26 @@ const roundOverMs = 6000;
 // Draws in a row where nobody survives before the round is called off.
 const wasteLimit = 3;
 
+// A bot's reaction after the signal, in ms, and how often it jumps the gun.
+const botReaction: Record<Difficulty, { from: number; to: number; early: number }> = {
+  easy: { from: 420, to: 650, early: 0.1 },
+  normal: { from: 290, to: 420, early: 0.03 },
+  hard: { from: 210, to: 300, early: 0 },
+};
+// How long before the signal a bot that jumps the gun shoots.
+const botJumpMs = 400;
+
+// Rolled once, when the draw starts, so the plan is saved with the room and holds on every request.
+function planBots(r: DuelRoom) {
+  const d = r.duel!;
+  for (const p of r.players) {
+    if (!p.bot || !d.alive.includes(p.id)) continue;
+    const { from, to, early } = botReaction[p.difficulty ?? 'normal'];
+    d.aims![p.id] =
+      Math.random() < early ? { early: true } : { ms: Math.round(from + Math.random() * (to - from)) };
+  }
+}
+
 export function newDraw(r: DuelRoom, now: number) {
   const d = r.duel!;
   // Never reused, so a shot that arrives late cannot count in the next draw.
@@ -48,6 +71,7 @@ export function newDraw(r: DuelRoom, now: number) {
     p.early = undefined;
     p.gained = 0;
   }
+  planBots(r);
 }
 // After a pause, with the shots already fired kept.
 export function rearm(r: DuelRoom, now: number) {
@@ -142,15 +166,6 @@ export function duelView({ alive, draw, fallen, winner, over, wins }: Duel): Due
   return { alive, draw, fallen, winner, over, wins };
 }
 
-// A bot's reaction after the signal, in ms, and how often it jumps the gun.
-const botReaction: Record<Difficulty, { from: number; to: number; early: number }> = {
-  easy: { from: 420, to: 650, early: 0.1 },
-  normal: { from: 290, to: 420, early: 0.03 },
-  hard: { from: 210, to: 300, early: 0 },
-};
-// How long before the signal a bot that jumps the gun shoots.
-const botJumpMs = 400;
-
 // Shoots for the bots whose moment has come. Returns whether one shot.
 export function duelBots(r: DuelRoom, bots: Record<string, Difficulty>, now: number) {
   const d = r.duel!;
@@ -159,12 +174,10 @@ export function duelBots(r: DuelRoom, bots: Record<string, Difficulty>, now: num
   for (const p of r.players) {
     const level = bots[p.id];
     if (!level || p.answered || !d.alive.includes(p.id)) continue;
-    const { from, to, early } = botReaction[level];
-    const aim = ((d.aims ??= {})[p.id] ??=
-      Math.random() < early ? null : Math.round(from + Math.random() * (to - from)));
-    if (now < r.signalAt + (aim ?? -botJumpMs)) continue;
-    if (aim === null) p.early = true;
-    else p.reactionMs = aim;
+    const aim = d.aims?.[p.id];
+    if (!aim || now < r.signalAt + ('early' in aim ? -botJumpMs : aim.ms)) continue;
+    if ('early' in aim) p.early = true;
+    else p.reactionMs = aim.ms;
     p.answered = true;
     acted = true;
   }

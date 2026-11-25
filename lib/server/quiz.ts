@@ -24,7 +24,14 @@ export type Quiz = {
   // Each bot's plan for this question: when it answers, and whether it knows the answer.
   aims?: Record<string, { at: number; right: boolean }>;
 };
-type Seat = { id: string; score: number; gained?: number; answered: boolean };
+type Seat = {
+  bot?: boolean;
+  difficulty?: Difficulty;
+  id: string;
+  score: number;
+  gained?: number;
+  answered: boolean;
+};
 // The parts of a room a quiz works with.
 export type QuizRoom = {
   quiz?: Quiz;
@@ -190,6 +197,7 @@ export function hurryQuiz(r: QuizRoom, here: (p: Seat) => boolean, now: number) 
 function toQuestion(r: QuizRoom, now: number) {
   playPowers(r);
   enter(r, 'question', now, quizTypes[roundOf(r).type].ms);
+  planBots(r);
 }
 function toSuspense(r: QuizRoom, now: number) {
   const q = r.quiz!;
@@ -367,6 +375,21 @@ function botPower(r: QuizRoom, id: string, level: Difficulty) {
   return quizPowers[power].target ? { power, target: leader.id } : { power };
 }
 
+// Rolled once, when the question starts, so the plan is saved with the room and holds on every request.
+function planBots(r: QuizRoom) {
+  const q = r.quiz!;
+  const { ms } = quizTypes[roundOf(r).type];
+  q.aims = {};
+  for (const p of r.players) {
+    if (!p.bot || !contends(r, p.id)) continue;
+    const skill = botSkill[p.difficulty ?? 'normal'];
+    q.aims[p.id] = {
+      at: Math.round(ms * (skill.from + Math.random() * (skill.to - skill.from))),
+      right: Math.random() < skill.right,
+    };
+  }
+}
+
 // Plays for the bots whose moment has come. Returns whether one acted. Bystanders sit out a tie-break.
 export function quizBots(r: QuizRoom, bots: Record<string, Difficulty>, now: number) {
   const q = r.quiz!;
@@ -378,12 +401,8 @@ export function quizBots(r: QuizRoom, bots: Record<string, Difficulty>, now: num
       choosePower(r, p.id, { round: r.round, ...botPower(r, p.id, level) });
       acted = true;
     } else if (q.stage === 'question' && !p.answered) {
-      const skill = botSkill[level];
-      const { ms } = quizTypes[roundOf(r).type];
-      const aim = ((q.aims ??= {})[p.id] ??= {
-        at: Math.round(ms * (skill.from + Math.random() * (skill.to - skill.from))),
-        right: Math.random() < skill.right,
-      });
+      const aim = q.aims?.[p.id];
+      if (!aim) continue;
       const at = r.started + aim.at;
       if (now < at || at >= cutoff(r, p.id)) continue;
       const { correct } = roundOf(r);
