@@ -61,3 +61,24 @@
   color: #ffe5ad;
   text-shadow: 2px 3px #5d2a4d;
 }
+
+/* TV: read from a sofa, so nothing on the home screen is smaller than about 24px at 1080p. */
+@media (min-width: 1600px) {
+  .hub { --tv: min(1.25vw, 2.25vh); }
+  .hub :is(.top nav button, .join, .how, .kicker, .meta, .card .meta, .cardLabels > span, .heroPager span, .primary, .secondary, .resume, .hubSearch, .smallLabel, .lockedShelf, .catalog > p, .catalog small) { font-size: var(--tv); }
+  .hub :is(.top nav, .join, .how, .meta, .card .meta) svg { width: 1.1em; height: 1.1em; }
+  .hub .brand { font-size: calc(var(--tv) * 1.3); }
+  .hub .hero p { font-size: calc(var(--tv) * 1.1); max-width: 620px; }
+  .hub .hero h2 { font-size: min(6vw, 10.5vh); }
+  .hub .cardLabels { flex-wrap: wrap; }
+  .hub .cardLabels > span:first-child { letter-spacing: .04em; }
+  .hub .card h3 { font-size: calc(var(--tv) * 1.4); }
+  .hub .shelfItem { flex-basis: 23.5vw; }
+  .hub .categoryNav a { font-size: calc(var(--tv) * 1.25); }
+  .hub .heroPager { border-radius: 30px; padding: 6px 10px; }
+  .hub dialog { width: min(60vw, 92vw); }
+  .hub .dialogInner .cover { aspect-ratio: 5; }
+  .hub .dialogContent > .primary { position: sticky; bottom: 20px; }
+  .hub .dialogContent :is(p, li, h3), .hub .profileForm { font-size: var(--tv); }
+  .hub .close { width: calc(var(--tv) * 2.1); height: calc(var(--tv) * 2.1); }
+}
