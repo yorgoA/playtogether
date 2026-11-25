@@ -1,7 +1,16 @@
 import { advanceDuel, bangWhenAllShot, duelView, leaveDuel, rearm, startDuel, type Duel } from './duel';
 import { roundChoices } from '../quiz/rounds';
 import { GameError, games, type Game } from './games';
-import { advanceQuiz, answerQuiz, choosePower, hurryQuiz, quizView, startQuiz, type Quiz } from './quiz';
+import {
+  advanceQuiz,
+  answerQuiz,
+  choosePower,
+  hurryQuiz,
+  quizView,
+  quizWakes,
+  startQuiz,
+  type Quiz,
+} from './quiz';
 import type { Question } from './trivia';
 import { botSeats, gameIds, type Difficulty, type RoomSnapshot } from '../contract';
 import { botColors, botLevel, botName } from './bots';
@@ -22,6 +31,7 @@ import {
   clearMatch,
   endMatch,
   leaveMatch,
+  matchWakes,
   playMatch,
   startMatch,
   tickMatch,
@@ -149,6 +159,29 @@ function advanceBots(r: Room, now: number) {
     }
   }
   return false;
+}
+// Moves the room on to `now` with no player acting: deadlines, bots and races. Returns whether it changed.
+export function tick(r: Room, now: number) {
+  const moved = advance(r, now);
+  return advanceBots(r, now) || moved;
+}
+// The next moment `tick` would change the room by itself, or null when only a player can move it on.
+export function nextWake(r: Room, now: number): number | null {
+  if (r.phase !== 'playing') return null;
+  const engine = activeModule(r);
+  const board = r.island;
+  const islandBots = board && r.players.some((p) => (p.bot || p.standIn) && botMove(board, p.id));
+  const times = engine
+    ? matchWakes(engine, r, context(r, now))
+    : [
+        r.quiz || r.duel ? r.deadline : 0,
+        ...(r.quiz ? quizWakes(r) : []),
+        islandBots ? (r.botAt ?? 0) : 0,
+        r.kings?.raceUntil ?? 0,
+      ];
+  // Anything already due was handled by the tick that came before.
+  const due = times.filter((t) => t > now);
+  return due.length ? Math.min(...due) : null;
 }
 function drink(r: Room, poured: ReturnType<typeof kingsMove>) {
   for (const p of r.players) if (poured?.drinkers.includes(p.id)) p.score -= poured.amount;

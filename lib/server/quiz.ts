@@ -174,6 +174,11 @@ function cutoff(r: QuizRoom, id: string) {
   const full = quizTypes[roundOf(r).type].ms;
   return r.started + (r.quiz!.rushed.includes(id) ? full / 2 : full);
 }
+// Players hit by Time Crunch run out of time before the question does.
+export function quizWakes(r: QuizRoom): number[] {
+  const q = r.quiz;
+  return q?.stage === 'question' ? q.rushed.map((id) => cutoff(r, id)) : [];
+}
 // Skips the wait once everyone who is still here has acted.
 export function hurryQuiz(r: QuizRoom, here: (p: Seat) => boolean, now: number) {
   const q = r.quiz!;
