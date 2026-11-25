@@ -552,7 +552,9 @@ describe('bots', () => {
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
-  it.each([2, 3, 4])('finish legal games with %i players', (count) => {
+  // Twenty-five whole games per table size take up to five seconds on a CI machine, the default limit.
+  const gamesMs = 20_000;
+  it.each([2, 3, 4])('finish legal games with %i players', { timeout: gamesMs }, (count) => {
     for (let seed = 1; seed <= 25; seed++) {
       vi.spyOn(Math, 'random').mockImplementation(seeded(seed));
       const ids = Array.from({ length: count }, (_, i) => 'p' + i),
