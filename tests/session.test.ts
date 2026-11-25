@@ -87,6 +87,13 @@ describe('repeating a join', () => {
     expect(join(room)).toEqual(first);
     expect(room.players.map((p) => p.id)).toEqual([...seats.map((s) => s.id), first.playerId]);
   });
+  it('gives the seat back in the lobby even under a corrected nickname, so one phone never holds two', () => {
+    const { room } = table('quiz', 1);
+    const first = join(room, { name: 'Anna' });
+    // The reply was lost, and the player fixed the name before trying again.
+    expect(join(room, { name: 'Ana' })).toEqual(first);
+    expect(room.players.map((p) => p.name)).toEqual(['P0', 'Anna']);
+  });
   it('needs the same id: another phone cannot take a connected seat', () => {
     const { room } = table('quiz', 1);
     join(room);

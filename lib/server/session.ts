@@ -347,9 +347,12 @@ export function mutate(
   if (action === 'join') {
     const joinId = typeof command.joinId === 'string' ? command.joinId : undefined;
     const wanted = typeof command.name === 'string' ? command.name.trim().toLowerCase() : '';
-    // A phone asking for another seat than the one its join id holds is a new request.
+    // In the lobby, the join id alone gives the seat back, even under a corrected nickname. Mid-match, a phone
+    // asking for another seat than the one its join id holds makes a new request.
     const again = joinId
-      ? r.players.find((p) => p.joinId === joinId && (!wanted || p.name.toLowerCase() === wanted))
+      ? r.players.find(
+          (p) => p.joinId === joinId && (r.phase === 'lobby' || !wanted || p.name.toLowerCase() === wanted),
+        )
       : undefined;
     if (again && r.phase !== 'ended') {
       // The same phone repeating a join. Both replies carry the same token, so either one works.
