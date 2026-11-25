@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QuizPower, QuizType } from '../lib/contract';
-import { dealPowers } from '../lib/server/quiz';
+import { dealPowers, startQuiz } from '../lib/server/quiz';
 import { snapshot } from '../lib/server/session';
 import { findQuestions, ownQuestions, parseTrivia } from '../lib/server/trivia';
 import { DROP, T0, table } from './helpers';
@@ -52,14 +52,36 @@ describe('quiz rounds', () => {
     }
     expect(seen).toEqual(['intro', 'power', 'question', 'suspense', 'reveal']);
   });
-  it('never repeats a theme or question in a match, or a question in a rematch', () => {
+  it('never repeats a theme or question in a match, spares included, or a question in a rematch', () => {
     const { room, host } = quiz(1, 10);
-    // After the ten rounds come spare questions, kept for tie-breaks.
-    const first = room.quiz!.rounds.slice(0, 10);
-    expect(new Set(first.map((q) => q.theme)).size).toBe(10);
+    // Ten rounds, then three spare questions kept for tie-breaks.
+    const first = [...room.quiz!.rounds];
+    expect(first).toHaveLength(13);
+    expect(new Set(first.slice(0, 10).map((q) => q.theme)).size).toBe(10);
+    expect(new Set(first.map((q) => q.text)).size).toBe(13);
+    expect(first[10].theme).not.toBe(first[9].theme);
     host({ action: 'restart' });
-    const texts = [...first, ...room.quiz!.rounds.slice(0, 10)].map((q) => q.text);
+    const texts = [...first.slice(0, 10), ...room.quiz!.rounds.slice(0, 10)].map((q) => q.text);
     expect(new Set(texts).size).toBe(20);
+  });
+  it('never deals a spare that repeats a question of the match from a nearly used-up pool', () => {
+    const pool = Array.from({ length: 12 }, (_, i) => ({
+      theme: 'Theme ' + (i % 4),
+      text: 'Question ' + i,
+      right: 'yes',
+      wrong: ['a', 'b', 'c'],
+    }));
+    for (let run = 0; run < 200; run++) {
+      const { room } = table('quiz', 1, 5);
+      // Nine of twelve questions were asked before: only three are fresh for eight to deal.
+      room.asked = pool.slice(0, 9).map((q) => q.text);
+      startQuiz(room, pool, T0);
+      const dealt = room.quiz!.rounds.map((q) => q.text);
+      expect(dealt).toHaveLength(8);
+      expect(new Set(dealt).size).toBe(8);
+      // Only the five planned rounds count as asked.
+      expect(room.asked!.slice(9)).toEqual(dealt.slice(0, 5));
+    }
   });
   it('moves on as soon as everyone connected has acted', () => {
     const { room, until, power, answer, play } = quiz(3);

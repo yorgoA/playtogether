@@ -60,15 +60,23 @@ export function dealPowers(rounds: number, players: number): QuizPower[] {
 function dealRounds(count: number, supply: Question[], asked: string[]): QuizRound[] {
   const seen = new Set(asked);
   const fresh = supply.filter((q) => !seen.has(q.text));
+  // Questions from earlier matches only fill in once the fresh ones run out.
+  const stale = shuffle(supply.filter((q) => seen.has(q.text)));
   const byTheme = new Map<string, Question[]>();
-  for (const q of fresh.length >= count ? fresh : supply)
+  for (const q of [...fresh, ...stale.slice(0, Math.max(0, count - fresh.length))])
     byTheme.set(q.theme, [...(byTheme.get(q.theme) ?? []), q]);
   let themes: string[] = [];
   let types: QuizType[] = [];
+  let last = '';
   return Array.from({ length: count }, () => {
-    if (!themes.length) themes = shuffle([...byTheme.keys()].filter((t) => byTheme.get(t)!.length));
+    if (!themes.length) {
+      themes = shuffle([...byTheme.keys()].filter((t) => byTheme.get(t)!.length));
+      // Themes are taken from the end, so a new lap never opens on the theme just played.
+      if (themes.length > 1 && themes.at(-1) === last) themes.unshift(themes.pop()!);
+    }
     if (!types.length) types = shuffle(Object.keys(quizTypes) as QuizType[]);
     const theme = themes.pop()!;
+    last = theme;
     const list = byTheme.get(theme)!;
     const q = list.splice(Math.floor(Math.random() * list.length), 1)[0];
     const options = shuffle([q.right, ...q.wrong]);
@@ -79,10 +87,13 @@ function dealRounds(count: number, supply: Question[], asked: string[]): QuizRou
 export function startQuiz(r: QuizRoom, supply: Question[], now: number) {
   const pool = supply.length ? supply : ownQuestions;
   const asked = r.asked ?? [];
-  const planned = dealRounds(r.rounds, pool, asked);
+  // Rounds and spares are dealt together, so a spare repeats neither a question nor, while themes
+  // last, a theme of this match. Spares count as asked only once played.
+  const spares = Math.max(0, Math.min(maxTiebreaks, pool.length - r.rounds));
+  const dealt = dealRounds(r.rounds + spares, pool, asked);
+  const planned = dealt.slice(0, r.rounds);
+  const spare = dealt.slice(r.rounds);
   r.asked = [...asked, ...planned.map((q) => q.text)].slice(-100);
-  // Kept for tie-break rounds, and counted as asked only once played.
-  const spare = dealRounds(Math.min(maxTiebreaks, pool.length), pool, r.asked);
   const kit = dealPowers(r.rounds, r.players.length);
   r.quiz = {
     stage: 'intro',
