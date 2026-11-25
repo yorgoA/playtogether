@@ -87,7 +87,7 @@ describe('rooms', () => {
     expect(asking.playerToken).toBeUndefined();
     expect(asking.room.storm.hand).toBeUndefined();
     const { room } = RoomResponse.parse(await json(await view(code, hostToken)));
-    expect(room.claims).toEqual([{ id: expect.any(String), seat: seats[0].playerId }]);
+    expect(room.claims).toEqual([{ id: expect.any(String), seat: seats[0].playerId, avatar: '🎮' }]);
     const answer = { action: 'claim', id: room.claims[0].id, accept: true };
     expect((await send(code, answer, seats[1].playerToken)).error).toMatch(/host/);
     await send(code, answer, hostToken);

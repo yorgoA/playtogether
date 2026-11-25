@@ -334,8 +334,10 @@ contenders: z.array(z.string()),
     // Recent reactions, numbered so a screen shows each one once.
     cheers: z.array(z.object({ n: z.number().int(), from: z.string(), emoji: z.string() }).strict()),
     players: z.array(Player),
-    // Phones asking for a seat back mid-match: the seat is a player id. Only the host screen sees them.
-    claims: z.array(z.object({ id: z.string(), seat: z.string() }).strict()),
+    // Phones asking for a seat back mid-match: `seat` is a player id and `avatar` the one the asking
+  // phone sent with its join, so the host can tell several requests for one seat apart. Only the
+  // host screen sees them.
+    claims: z.array(z.object({ id: z.string(), seat: z.string(), avatar: z.string() }).strict()),
   })
   .strict();
 export type RoomSnapshot = z.infer<typeof RoomSnapshot>;

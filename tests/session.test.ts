@@ -280,6 +280,15 @@ describe('taking a seat back mid-match', () => {
     expect(room.claims!.length).toBeLessThanOrEqual(12);
   });
 
+  it('shows the avatar each phone sent, so the host can tell them apart', () => {
+    const { room } = match();
+    ask(room, 'new-phone-secret-1', T0 + DROP, { avatar: '🐙' });
+    ask(room, 'new-phone-secret-2', T0 + DROP, { avatar: '🦊' });
+    expect(claims(room).map((c) => c.avatar)).toEqual(['🐙', '🦊']);
+    ask(room, 'new-phone-secret-1');
+    expect(claims(room).map((c) => c.avatar)).toEqual(['🎮', '🦊']);
+  });
+
   it('needs the phone to send a join id', () => {
     const { room } = match();
     expect(() => ask(room)).toThrow('Ask the host to let you back in.');

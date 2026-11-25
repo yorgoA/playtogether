@@ -67,7 +67,7 @@ export type Room = {
   // Quiz questions this room has had, so a rematch brings new ones.
   asked?: string[];
   // Phones asking for a seat back mid-match, until the host answers. `joinId` is the asking phone's secret.
-  claims?: { id: string; joinId: string; seat: string; seen: number; refused?: boolean }[];
+  claims?: { id: string; joinId: string; seat: string; avatar: string; seen: number; refused?: boolean }[];
   botAt?: number;
   island?: Island;
   pyramid?: Pyramid;
@@ -304,15 +304,15 @@ function start(r: Room, now: number, questions: Question[]) {
 type Mutation = { dirty: boolean; extras: Record<string, string>; pending?: boolean };
 // Mid-match, a seat may hold a hidden hand, so it moves to another phone only once the host agrees. The phone
 // repeats its join with the same id until then, and gets the seat back through it.
-function claimSeat(r: Room, seat: Player, joinId: string | undefined, now: number): Mutation {
+function claimSeat(r: Room, seat: Player, joinId: string | undefined, avatar: string, now: number): Mutation {
   if (!joinId) throw new GameError('Ask the host to let you back in.', 409);
   // One open request per phone: asking for another seat replaces the one before.
   r.claims = freshClaims(r, now).filter((c) => c.joinId !== joinId || c.seat === seat.id || c.refused);
   const claim = r.claims.find((c) => c.joinId === joinId && c.seat === seat.id);
   if (claim) {
     // Repeats only refresh the request now and then, so a waiting phone barely writes the room.
-    const dirty = now - claim.seen > 5000;
-    if (dirty) Object.assign(claim, { seen: now });
+    const dirty = now - claim.seen > 5000 || claim.avatar !== avatar;
+    if (dirty) Object.assign(claim, { seen: now, avatar });
     return { dirty, extras: {}, pending: true };
   }
   const forSeat = r.claims.filter((c) => c.seat === seat.id);
@@ -324,7 +324,7 @@ function claimSeat(r: Room, seat: Player, joinId: string | undefined, now: numbe
     const oldest = r.claims.find((c) => c.refused) ?? r.claims[0];
     r.claims = r.claims.filter((c) => c !== oldest);
   }
-  r.claims.push({ id: crypto.randomUUID(), joinId, seat: seat.id, seen: now });
+  r.claims.push({ id: crypto.randomUUID(), joinId, seat: seat.id, avatar, seen: now });
   return { dirty: true, extras: {}, pending: true };
 }
 
@@ -363,7 +363,8 @@ export function mutate(
     if (refused && (!dropped || dropped.id === refused.seat))
       throw new GameError('The host did not give you this seat.', 403);
     if (dropped && r.phase !== 'lobby' && r.phase !== 'ended') {
-      const claimed = claimSeat(r, dropped, joinId, now);
+      const avatar = textField(command.avatar ?? '🎮', 32, 'avatar');
+      const claimed = claimSeat(r, dropped, joinId, avatar, now);
       return { ...claimed, dirty: dirty || claimed.dirty };
     }
     if (dropped && r.phase === 'lobby') {
@@ -664,7 +665,7 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
     cheers: (r.cheers ?? [])
       .filter((c) => now - c.at < cheerMs)
       .map(({ n, from, emoji }) => ({ n, from, emoji })),
-    claims: host ? openClaims(r, now).map(({ id, seat }) => ({ id, seat })) : [],
+    claims: host ? openClaims(r, now).map(({ id, seat, avatar }) => ({ id, seat, avatar })) : [],
     players: r.players.map((p) => ({
       bot: p.bot,
       standIn: p.standIn,
