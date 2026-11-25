@@ -166,6 +166,17 @@ export function duelView({ alive, draw, fallen, winner, over, wins }: Duel): Due
   return { alive, draw, fallen, winner, over, wins };
 }
 
+// When the bots still standing in this draw shoot, as planned when it started.
+export function duelWakes(r: DuelRoom): number[] {
+  const d = r.duel;
+  if (!d || r.revealing) return [];
+  return r.players
+    .filter((p) => p.bot && !p.answered && d.alive.includes(p.id) && d.aims?.[p.id])
+    .map((p) => {
+      const aim = d.aims![p.id];
+      return r.signalAt + ('early' in aim ? -botJumpMs : aim.ms);
+    });
+}
 // Shoots for the bots whose moment has come. Returns whether one shot.
 export function duelBots(r: DuelRoom, bots: Record<string, Difficulty>, now: number) {
   const d = r.duel!;

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { botPowerMs } from '../lib/server/quiz';
 import { nextWake, tick, type Room } from '../lib/server/session';
 import { DROP, T0, table } from './helpers';
 
@@ -55,6 +56,47 @@ describe('room clock', () => {
     host({ action: 'start' });
     host({ action: 'standIn', playerId: seats[0].id }, T0 + DROP);
     runClock(room, T0 + DROP);
+    expect(room.phase).toBe('results');
+  });
+
+  it('wakes when a standoff bot draws, at its planned time', () => {
+    seededRandom();
+    const { room, host } = table('reaction', 1, 1);
+    host({ action: 'addBot', difficulty: 'hard' });
+    host({ action: 'start' });
+    const bot = room.players[1];
+    const aim = room.duel!.aims![bot.id] as { ms: number };
+    expect(nextWake(room, T0)).toBe(room.signalAt + aim.ms);
+    tick(room, room.signalAt + aim.ms);
+    expect(bot).toMatchObject({ answered: true, reactionMs: aim.ms });
+  });
+
+  it('wakes when a quiz bot chooses a power and when it answers', () => {
+    seededRandom();
+    const { room, host } = table('quiz', 1, 1);
+    host({ action: 'addBot', difficulty: 'hard' });
+    host({ action: 'start' });
+    const bot = room.players[1];
+    tick(room, room.deadline);
+    expect(room.quiz!.stage).toBe('power');
+    expect(nextWake(room, room.started)).toBe(room.started + botPowerMs);
+    tick(room, room.started + botPowerMs);
+    expect(room.quiz!.chosen[bot.id]).toBeDefined();
+    tick(room, room.deadline);
+    expect(room.quiz!.stage).toBe('question');
+    const at = room.started + room.quiz!.aims![bot.id].at;
+    expect(nextWake(room, room.started)).toBe(at);
+    tick(room, at);
+    expect(room.quiz!.picks[bot.id].at).toBe(at);
+  });
+
+  it.each(['quiz', 'reaction'])('plays a whole %s match with bots on the clock alone', (game) => {
+    seededRandom();
+    const { room, host } = table(game, 1, 2);
+    host({ action: 'addBot' });
+    host({ action: 'addBot', difficulty: 'hard' });
+    host({ action: 'start' });
+    runClock(room, T0);
     expect(room.phase).toBe('results');
   });
 

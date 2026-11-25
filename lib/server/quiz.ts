@@ -184,10 +184,19 @@ function cutoff(r: QuizRoom, id: string) {
   const full = quizTypes[roundOf(r).type].ms;
   return r.started + (r.quiz!.rushed.includes(id) ? full / 2 : full);
 }
-// Players hit by Time Crunch run out of time before the question does.
+// Moments within a stage when the quiz changes by itself: bots choosing a power or answering, and players hit
+// by Time Crunch running out of time before the question does.
 export function quizWakes(r: QuizRoom): number[] {
   const q = r.quiz;
-  return q?.stage === 'question' ? q.rushed.map((id) => cutoff(r, id)) : [];
+  if (q?.stage === 'power')
+    return r.players
+      .filter((p) => p.bot && !q.chosen[p.id] && q.hands[p.id]?.length && contends(r, p.id))
+      .map(() => r.started + botPowerMs);
+  if (q?.stage !== 'question') return [];
+  const answers = r.players
+    .filter((p) => p.bot && !p.answered && q.aims?.[p.id])
+    .map((p) => r.started + q.aims![p.id].at);
+  return [...q.rushed.map((id) => cutoff(r, id)), ...answers];
 }
 // Skips the wait once everyone who is still here has acted.
 export function hurryQuiz(r: QuizRoom, here: (p: Seat) => boolean, now: number) {

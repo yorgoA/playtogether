@@ -3,6 +3,7 @@ import {
   bangWhenAllShot,
   duelBots,
   duelView,
+  duelWakes,
   leaveDuel,
   rearm,
   startDuel,
@@ -204,6 +205,7 @@ export function nextWake(r: Room, now: number): number | null {
     : [
         r.quiz || r.duel ? r.deadline : 0,
         ...(r.quiz ? quizWakes(r) : []),
+        ...(r.duel ? duelWakes(r) : []),
         islandBots ? (r.botAt ?? 0) : 0,
         r.kings?.raceUntil ?? 0,
       ];
