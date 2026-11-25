@@ -31,4 +31,4 @@
 @media(prefers-reduced-motion:reduce){.qz-stage,.qz-stage *,.qz-verdict{animation:none!important}}
 /* Games that need the whole TV: the header gives its room to the stage. */
 .pt-session:has(.qz-tv,.du-scene,.st-table) .pt-game-head,.pt-session:has(.qz-tv,.du-scene,.st-table) .play-floor>.pt-row{display:none}.pt-session:has(.qz-tv,.du-scene,.st-table) .pt-session-nav{padding:8px 0;margin-bottom:10px}.pt-session:has(.qz-tv,.du-scene,.st-table){padding-bottom:12px}.pt-session:has(.qz-tv,.du-scene,.st-table) .pt-actions{margin-top:12px}.pt-session:has(.qz-tv,.du-scene,.st-table) .pt-room-foot{margin-top:4px}
-.pt-phone:has(.qz-phone,.du-phone,.st-phone) .pt-game-head{display:none}.qz-phone,.du-phone{margin-top:14px}
+.pt-phone:has(.qz-phone,.du-phone,.dg,.st-phone) .pt-game-head{display:none}.qz-phone,.du-phone{margin-top:14px}
