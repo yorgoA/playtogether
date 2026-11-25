@@ -1,8 +1,9 @@
-import type { DuelView } from '../contract/rooms';
+import type { Difficulty, DuelView } from '../contract/rooms';
 import { contends, totalRounds } from './rounds';
 
 // A standoff: everyone draws on the signal and the slowest falls, until one is left standing.
-export type Duel = DuelView & { wasted: number };
+// `aims` holds each bot's reaction for this draw, or null when it will jump the gun.
+export type Duel = DuelView & { wasted: number; aims?: Record<string, number | null> };
 type Seat = {
   id: string;
   score: number;
@@ -36,6 +37,7 @@ export function newDraw(r: DuelRoom, now: number) {
   // Never reused, so a shot that arrives late cannot count in the next draw.
   d.draw++;
   d.fallen = [];
+  d.aims = {};
   r.revealing = false;
   r.started = now;
   r.deadline = now + drawMs;
@@ -138,4 +140,33 @@ export function leaveDuel(r: DuelRoom, id: string, now: number) {
 }
 export function duelView({ alive, draw, fallen, winner, over, wins }: Duel): DuelView {
   return { alive, draw, fallen, winner, over, wins };
+}
+
+// A bot's reaction after the signal, in ms, and how often it jumps the gun.
+const botReaction: Record<Difficulty, { from: number; to: number; early: number }> = {
+  easy: { from: 420, to: 650, early: 0.1 },
+  normal: { from: 290, to: 420, early: 0.03 },
+  hard: { from: 210, to: 300, early: 0 },
+};
+// How long before the signal a bot that jumps the gun shoots.
+const botJumpMs = 400;
+
+// Shoots for the bots whose moment has come. Returns whether one shot.
+export function duelBots(r: DuelRoom, bots: Record<string, Difficulty>, now: number) {
+  const d = r.duel!;
+  if (r.revealing) return false;
+  let acted = false;
+  for (const p of r.players) {
+    const level = bots[p.id];
+    if (!level || p.answered || !d.alive.includes(p.id)) continue;
+    const { from, to, early } = botReaction[level];
+    const aim = ((d.aims ??= {})[p.id] ??=
+      Math.random() < early ? null : Math.round(from + Math.random() * (to - from)));
+    if (now < r.signalAt + (aim ?? -botJumpMs)) continue;
+    if (aim === null) p.early = true;
+    else p.reactionMs = aim;
+    p.answered = true;
+    acted = true;
+  }
+  return acted;
 }

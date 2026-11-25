@@ -6,4 +6,4 @@ import type { RoomSnapshot } from '../contract/rooms';
 export const difficulties = ['easy', 'normal', 'hard'] as const;
 export type Difficulty = (typeof difficulties)[number];
 // How many bots each game seats, sent with `addBot`. Games not listed have no bots yet.
-export const botSeats: Partial<Record<RoomSnapshot['game'], number>> = { settlers: 3, storm: 3 };
+export const botSeats: Partial<Record<RoomSnapshot['game'], number>> = { settlers: 3, storm: 3, quiz: 3, reaction: 3 };

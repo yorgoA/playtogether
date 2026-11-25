@@ -128,7 +128,7 @@ describe('bot seats', () => {
   });
 
   it('are refused in games without a bot, outside the lobby, or at an unknown level', () => {
-    for (const game of ['quiz', 'reaction', 'kings', 'pyramid'])
+    for (const game of ['kings', 'pyramid'])
       expect(() => room(game, 1).host({ action: 'addBot' })).toThrow('has no bots yet.');
     const { host } = room('storm', 1);
     expect(() => host({ action: 'addBot', difficulty: 'genius' })).toThrow('Choose easy, normal or hard.');
