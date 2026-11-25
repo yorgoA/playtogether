@@ -2,7 +2,7 @@ import { networkInterfaces } from 'node:os';
 import { cloudflare } from '@cloudflare/vite-plugin';
 import { defineConfig } from 'vite';
 import vinext from 'vinext';
-import { localHttps } from './scripts/local-https.mjs';
+import { hostHeader, localHttps } from './scripts/local-https.mjs';
 
 // With --host, tell the host screen which address phones on the Wi-Fi can use.
 function lanHost() {
@@ -28,6 +28,7 @@ export default defineConfig(({ command, mode }) => ({
     ),
   },
   plugins: [
+    ...(mode === 'https' ? [hostHeader] : []),
     vinext(),
     cloudflare({
       viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },

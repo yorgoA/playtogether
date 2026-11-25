@@ -27,3 +27,20 @@ export function localHttps(address) {
   }
   return { key: readFileSync(key), cert: readFileSync(cert) };
 }
+
+// Vite serves https over HTTP/2, which sends `:authority` instead of Host. vinext compares Host with the page's
+// address and, without it, takes a phone on the Wi-Fi for another site and blocks it.
+export const hostHeader = {
+  name: 'host-header',
+  enforce: 'pre',
+  configureServer(server) {
+    server.middlewares.use((req, _res, next) => {
+      if (!req.headers.host && req.headers[':authority']) {
+        req.headers.host = req.headers[':authority'];
+        // The Worker's request is built from these.
+        req.rawHeaders.push('host', req.headers.host);
+      }
+      next();
+    });
+  },
+};
