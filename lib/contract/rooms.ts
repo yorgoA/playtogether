@@ -15,6 +15,9 @@ export const adultGames: readonly string[] = ['pyramid', 'kings'];
 export const resources = ['timber', 'clay', 'grain', 'wool', 'ore'] as const;
 export const devCards = ['knight', 'roads', 'bounty', 'monopoly', 'victory'] as const;
 export const pieces = ['road', 'settlement', 'city'] as const;
+// How well a bot plays.
+export const difficulties = ['easy', 'normal', 'hard'] as const;
+export type Difficulty = (typeof difficulties)[number];
 const Game = z.enum(gameIds);
 const Resource = z.enum(resources);
 const Piece = z.enum(pieces);

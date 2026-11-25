@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { gameIds, RoomSnapshot } from '../lib/contract';
+import { gameIds, RoomSnapshot, type Difficulty } from '../lib/contract';
 import {
+  botDelayMs,
   clearMatch,
   leaveMatch,
   playMatch,
@@ -27,8 +28,9 @@ const counting: GameModule<Count, { turn: string; mine?: number }> = {
     turn: players[0],
     counts: Object.fromEntries(players.map((id) => [id, 0])),
   }),
-  move(s, id) {
+  move(s, id, command) {
     if (s.turn !== id) throw new Error('Wait for your turn.');
+    if (command.bad) throw new Error('Not a move.');
     s.counts[id]++;
     s.turn = next(s);
   },
@@ -36,6 +38,7 @@ const counting: GameModule<Count, { turn: string; mine?: number }> = {
     s.turn = next(s);
   },
   turn: (s) => s.turn,
+  bot: () => ({}),
   leave(s, id) {
     if (s.turn === id) s.turn = next(s);
     s.order = s.order.filter((other) => other !== id);
@@ -44,7 +47,7 @@ const counting: GameModule<Count, { turn: string; mine?: number }> = {
   score: (s, id) => s.counts[id] ?? 0,
   view: (s, viewer) => ({ turn: s.turn, mine: viewer.id ? s.counts[viewer.id] : undefined }),
 };
-const at = (now = T0) => ({ now, connected: [] });
+const at = (now = T0, bots: Record<string, Difficulty> = {}) => ({ now, connected: [], bots });
 
 function setup(players = ['a', 'b', 'c']) {
   const room: MatchRoom & { count?: Count } = {
@@ -82,6 +85,26 @@ describe('Game engine', () => {
     startMatch(untimed, room, at());
     expect(room.deadline).toBe(0);
     expect(tickMatch(untimed, room, at(T0 + 99_000))).toBe(false);
+  });
+
+  it("plays a bot's turn once it has waited a moment, and never a human's", () => {
+    const { room, s } = setup();
+    const bots = { b: 'hard' as const };
+    expect(tickMatch(counting, room, at(T0 + botDelayMs, bots))).toBe(false);
+    playMatch(counting, room, 'a', {}, at(T0 + 2000, bots));
+    expect(tickMatch(counting, room, at(T0 + 2000 + botDelayMs - 1, bots))).toBe(false);
+    expect(tickMatch(counting, room, at(T0 + 2000 + botDelayMs, bots))).toBe(true);
+    expect(s.counts.b).toBe(1);
+    expect(s.turn).toBe('c');
+    expect(room.deadline).toBe(T0 + 2000 + botDelayMs + 10_000);
+  });
+
+  it('plays as if out of time when a bot sends a move the game refuses', () => {
+    const { room, s } = setup();
+    const confused = { ...counting, bot: () => ({ bad: true }) };
+    expect(tickMatch(confused, room, at(T0 + botDelayMs, { a: 'easy' }))).toBe(true);
+    expect(s.counts.a).toBe(0);
+    expect(s.turn).toBe('b');
   });
 
   it('forgets the match when the room goes back to the lobby', () => {

@@ -1,3 +1,4 @@
+import type { Difficulty } from '../contract';
 import { GameError, games, type Game } from './games';
 
 type Command = Record<string, unknown>;
@@ -7,7 +8,11 @@ export type MatchContext = {
   now: number;
   // Players whose phones are still in touch, for games that wait on the whole table.
   connected: string[];
+  // The bots at the table, and how well each one plays.
+  bots: Record<string, Difficulty>;
 };
+// How long a bot waits into its turn, so the table can follow what it plays.
+export const botDelayMs = 1500;
 
 // What a game gives the engine. The engine runs the match around it: starting it, the turn clock, players
 // leaving, the end and the final scores. A game only knows its own rules and what each screen may see.
@@ -25,6 +30,8 @@ export type GameModule<S, V> = {
   timeout?(state: S, ctx: MatchContext): void;
   // Whose turn it is, for games played in turns.
   turn?(state: S): string | null;
+  // A bot's next command when it holds the turn. It sends it like a phone would, through `move`.
+  bot?(state: S, playerId: string, level: Difficulty): Command;
   leave(state: S, playerId: string, ctx: MatchContext): void;
   over(state: S): boolean;
   score(state: S, playerId: string): number;
@@ -66,10 +73,25 @@ export function playMatch<S, V>(
   settle(m, r, state, ctx.now, true);
 }
 
-// Plays for whoever ran out of time. Returns whether the match changed.
+// Plays one move for a bot whose turn it is, or for whoever ran out of time. Returns whether the match changed.
 export function tickMatch<S, V>(m: GameModule<S, V>, r: MatchRoom, ctx: MatchContext) {
   const state = matchOf(m, r);
-  if (!state || r.phase !== 'playing' || !m.turnMs || !m.timeout || ctx.now < r.deadline) return false;
+  if (!state || r.phase !== 'playing') return false;
+  const turn = m.turn?.(state);
+  const level = turn ? ctx.bots[turn] : undefined;
+  const started = m.turnMs ? r.deadline - m.turnMs : ctx.now;
+  if (turn && level && m.bot && ctx.now >= started + botDelayMs) {
+    try {
+      m.move(state, turn, m.bot(state, turn, level), ctx);
+    } catch {
+      // Every request runs this first, so a bot's bad move must not jam the room. It plays as if out of time.
+      if (!m.timeout) return false;
+      m.timeout(state, ctx);
+    }
+    settle(m, r, state, ctx.now, true);
+    return true;
+  }
+  if (!m.turnMs || !m.timeout || ctx.now < r.deadline) return false;
   m.timeout(state, ctx);
   settle(m, r, state, ctx.now, true);
   return true;

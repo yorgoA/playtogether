@@ -3,7 +3,7 @@ import { roundChoices } from '../quiz/rounds';
 import { GameError, games, type Game } from './games';
 import { advanceQuiz, answerQuiz, choosePower, hurryQuiz, quizView, startQuiz, type Quiz } from './quiz';
 import type { Question } from './trivia';
-import { gameIds, type RoomSnapshot } from '../contract';
+import { gameIds, type Difficulty, type RoomSnapshot } from '../contract';
 import { claimPyramid, flipPyramid, newPyramid, pyramidView, resolvePyramid, type Pyramid } from './pyramid';
 import {
   kingsMove,
@@ -33,6 +33,7 @@ import { active, goal, handSize, pointsFor, resources, type Island } from '../is
 import { botMove } from './island-bot';
 type Player = {
   bot?: boolean;
+  difficulty?: Difficulty;
   // What the phone called its join, so repeating it gives back this seat. As secret as the token.
   joinId?: string;
   // A bot is playing this disconnected player's seat until they return.
@@ -82,6 +83,7 @@ const connected = (p: Player, now: number) => !!p.bot || now - p.lastSeen < 2500
 const context = (r: Room, now: number): MatchContext => ({
   now,
   connected: r.players.filter((p) => connected(p, now)).map((p) => p.id),
+  bots: Object.fromEntries(r.players.filter((p) => p.bot).map((p) => [p.id, p.difficulty ?? 'normal'])),
 });
 // Phones learn the signal before it fires, so every screen can show it together. Long enough for a slow
 // phone to lose a message and ask again, and shorter than the shortest wait (2 s).
