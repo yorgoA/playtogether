@@ -315,8 +315,11 @@ export const RoomSnapshot = z
     code: z.string().length(4),
     game: Game,
     phase: Phase,
+    // The rounds chosen in the lobby, plus any tie-break rounds played since.
     rounds: z.number(),
     round: z.number(),
+    // True from the first round added to break a tie for first place.
+    tiebreak: z.boolean(),
     deadline: z.number(),
     signalAt: z.number().nullable(),
     serverTime: z.number(),

@@ -54,10 +54,11 @@ describe('quiz rounds', () => {
   });
   it('never repeats a theme or question in a match, or a question in a rematch', () => {
     const { room, host } = quiz(1, 10);
-    const first = room.quiz!.rounds;
+    // After the ten rounds come spare questions, kept for tie-breaks.
+    const first = room.quiz!.rounds.slice(0, 10);
     expect(new Set(first.map((q) => q.theme)).size).toBe(10);
     host({ action: 'restart' });
-    const texts = [...first, ...room.quiz!.rounds].map((q) => q.text);
+    const texts = [...first, ...room.quiz!.rounds.slice(0, 10)].map((q) => q.text);
     expect(new Set(texts).size).toBe(20);
   });
   it('moves on as soon as everyone connected has acted', () => {
@@ -228,12 +229,14 @@ describe('quiz powers', () => {
 
 describe('reactions', () => {
   it('reach the TV during the reveal and results, for a moment, and not too often', () => {
-    const { room, play, until, seats, next } = quiz(2, 1);
+    const { room, play, until, seats, next, answer } = quiz(2, 1);
     const cheer = (after: number) => play(0, { action: 'cheer', emoji: '🔥' }, room.started + after);
     const seen = (after: number) => snapshot(room, room.started + after, room.hostToken).cheers;
     until('question');
     cheer(0);
     expect(seen(0)).toEqual([]);
+    // A winner, so the match ends instead of playing a tie-break.
+    answer(0, true);
     until('reveal');
     cheer(0);
     cheer(300);

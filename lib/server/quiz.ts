@@ -1,6 +1,7 @@
 import type { QuizPower, QuizType, QuizView } from '../contract/rooms';
 import { crossOutAt, introMs, powerMs, quizPowers, quizTypes, revealMs, suspenseMs } from '../quiz/rules';
 import { GameError } from './games';
+import { maxTiebreaks, totalRounds } from './rounds';
 import { ownQuestions, type Question } from './trivia';
 
 export type QuizRound = { theme: string; type: QuizType; text: string; options: string[]; correct: number };
@@ -28,6 +29,7 @@ export type QuizRoom = {
   players: Seat[];
   round: number;
   rounds: number;
+  tiebreaks?: number;
   started: number;
   deadline: number;
   revealing?: boolean;
@@ -75,12 +77,16 @@ function dealRounds(count: number, supply: Question[], asked: string[]): QuizRou
 }
 
 export function startQuiz(r: QuizRoom, supply: Question[], now: number) {
-  const rounds = dealRounds(r.rounds, supply.length ? supply : ownQuestions, r.asked ?? []);
-  r.asked = [...(r.asked ?? []), ...rounds.map((q) => q.text)].slice(-100);
+  const pool = supply.length ? supply : ownQuestions;
+  const asked = r.asked ?? [];
+  const planned = dealRounds(r.rounds, pool, asked);
+  r.asked = [...asked, ...planned.map((q) => q.text)].slice(-100);
+  // Kept for tie-break rounds, and counted as asked only once played.
+  const spare = dealRounds(Math.min(maxTiebreaks, pool.length), pool, r.asked);
   const kit = dealPowers(r.rounds, r.players.length);
   r.quiz = {
     stage: 'intro',
-    rounds,
+    rounds: [...planned, ...spare],
     hands: Object.fromEntries(r.players.map((p) => [p.id, [...kit]])),
     chosen: {},
     plays: [],
@@ -102,6 +108,7 @@ function enter(r: QuizRoom, stage: Quiz['stage'], now: number, ms: number) {
 }
 function nextRound(r: QuizRoom, now: number) {
   r.round++;
+  if (r.round > r.rounds) r.asked = [...(r.asked ?? []), roundOf(r).text].slice(-100);
   r.revealing = false;
   Object.assign(r.quiz!, {
     chosen: {},
@@ -235,7 +242,7 @@ export function advanceQuiz(r: QuizRoom, here: (p: Seat) => boolean, now: number
     }
     r.revealing = true;
     enter(r, 'reveal', now, revealMs);
-  } else if (r.round >= r.rounds) return 'over';
+  } else if (r.round >= totalRounds(r)) return 'over';
   else nextRound(r, now);
   return true;
 }
