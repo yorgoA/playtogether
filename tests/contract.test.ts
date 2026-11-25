@@ -66,6 +66,7 @@ describe('what the screens send is accepted', () => {
     })),
     { action: 'configure', game: 'reaction' },
     { action: 'configure', rounds: 7 },
+    { action: 'claim', id: 'abc', accept: true },
     { action: 'kick', playerId: 'abc' },
     { action: 'standIn', playerId: 'abc' },
   ];

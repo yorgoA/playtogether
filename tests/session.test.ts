@@ -129,18 +129,100 @@ describe('repeating a join', () => {
   });
 });
 
-describe('dropped players', () => {
-  it('can rejoin mid-match by nickname, keeping seat and score', () => {
-    const { room, host, ping, seats } = table('quiz', 2);
-    host({ action: 'start' });
-    room.players[1].score = 700;
-    ping(0, T0 + DROP);
-    const { extras } = mutate(room, { action: 'join', name: ' p1 ' }, '', T0 + DROP);
+describe('taking a seat back mid-match', () => {
+  const ask = (room: Parameters<typeof mutate>[0], joinId?: string, now = T0 + DROP) =>
+    mutate(room, { action: 'join', name: ' p1 ', joinId }, '', now);
+  const claims = (room: Parameters<typeof mutate>[0], now = T0 + DROP) =>
+    snapshot(room, now, room.hostToken).claims;
+  // P1's phone has gone quiet; P0's still polls.
+  function match() {
+    const t = table('quiz', 2);
+    t.host({ action: 'start' });
+    t.room.players[1].score = 700;
+    t.ping(0, T0 + DROP);
+    return t;
+  }
+
+  it('waits for the host, then keeps the seat and score on the new phone', () => {
+    const { room, host, seats } = match();
+    expect(ask(room, 'new-phone-secret-1')).toMatchObject({ pending: true, extras: {} });
+    const [claim] = claims(room);
+    expect(claim.seat).toBe(seats[1].id);
+    for (const token of ['', seats[0].token]) expect(snapshot(room, T0 + DROP, token).claims).toEqual([]);
+    host({ action: 'claim', id: claim.id, accept: true }, T0 + DROP);
+    const { extras } = ask(room, 'new-phone-secret-1');
     expect(extras.playerId).toBe(seats[1].id);
     expect(room.players[1].score).toBe(700);
     expect(() => mutate(room, { action: 'view' }, seats[1].token, T0 + DROP)).toThrow('Join this room');
     mutate(room, { action: 'view' }, extras.playerToken, T0 + DROP);
   });
+
+  it('tells a phone the host turned down, until it asks again with a new id', () => {
+    const { room, host } = match();
+    ask(room, 'new-phone-secret-1');
+    host({ action: 'claim', id: claims(room)[0].id, accept: false }, T0 + DROP);
+    expect(claims(room)).toEqual([]);
+    expect(() => ask(room, 'new-phone-secret-1')).toThrow('The host did not give you this seat.');
+    expect(ask(room, 'new-phone-secret-2').pending).toBe(true);
+  });
+
+  it('gives the seat to one phone and turns the others down', () => {
+    const { room, host, seats } = match();
+    ask(room, 'first-phone-secret');
+    ask(room, 'second-phone-secret');
+    const [first, second] = claims(room);
+    expect(second.seat).toBe(first.seat);
+    host({ action: 'claim', id: first.id, accept: true }, T0 + DROP);
+    expect(ask(room, 'first-phone-secret').extras.playerId).toBe(seats[1].id);
+    expect(() => ask(room, 'second-phone-secret')).toThrow('The host did not give you this seat.');
+  });
+
+  it('forgets a request its phone stopped repeating, or whose seat was removed', () => {
+    const { room, host, seats } = match();
+    ask(room, 'new-phone-secret-1');
+    const [claim] = claims(room);
+    const later = T0 + DROP + 25_000;
+    expect(claims(room, later)).toEqual([]);
+    expect(() => host({ action: 'claim', id: claim.id, accept: true }, later)).toThrow(
+      'That request has gone.',
+    );
+    ask(room, 'new-phone-secret-1');
+    host({ action: 'kick', playerId: seats[1].id }, T0 + DROP);
+    expect(room.claims).toEqual([]);
+  });
+
+  it('cannot hand over a seat whose own phone is back', () => {
+    const { room, host, ping } = match();
+    ask(room, 'new-phone-secret-1');
+    const [claim] = claims(room);
+    ping(1, T0 + DROP + 1000);
+    expect(claims(room, T0 + DROP + 1000)).toEqual([]);
+    expect(() => host({ action: 'claim', id: claim.id, accept: true }, T0 + DROP + 1000)).toThrow(
+      'That request has gone.',
+    );
+  });
+
+  it('lets only three phones ask for one seat at a time', () => {
+    const { room } = match();
+    for (const n of [1, 2, 3]) ask(room, 'new-phone-secret-' + n);
+    expect(() => ask(room, 'new-phone-secret-4')).toThrow('Too many phones are asking for this seat.');
+  });
+
+  it('needs the phone to send a join id', () => {
+    const { room } = match();
+    expect(() => ask(room)).toThrow('Ask the host to let you back in.');
+  });
+
+  it('is dropped when the room goes back to the lobby, where a quiet seat is taken back at once', () => {
+    const { room, host, seats } = match();
+    ask(room, 'new-phone-secret-1');
+    host({ action: 'lobby' }, T0 + DROP);
+    expect(room.claims).toBeUndefined();
+    expect(ask(room, 'new-phone-secret-1').extras.playerId).toBe(seats[1].id);
+  });
+});
+
+describe('dropped players', () => {
   it('cannot have their seat taken while connected', () => {
     const { room, host } = table('quiz', 2);
     host({ action: 'start' });
