@@ -1,7 +1,8 @@
 "use client";
 type PermissionAPI={requestPermission?:()=>Promise<string>};
 export async function allowSensors(){
- if(!window.isSecureContext||typeof DeviceMotionEvent==='undefined')throw Error('Motion sensors are unavailable here. Touch controls are ready.');
+ if(!window.isSecureContext)throw Error('Shaking needs a secure page, and this one is plain http. On the computer, run npm run dev:https, then scan the new QR code. Touch works here.');
+ if(typeof DeviceMotionEvent==='undefined')throw Error('Motion sensors are unavailable here. Touch controls are ready.');
  const motion=DeviceMotionEvent as unknown as PermissionAPI;
  const orientation=typeof DeviceOrientationEvent!=='undefined'?DeviceOrientationEvent as unknown as PermissionAPI:null;
  const permissions=[motion.requestPermission?.(),orientation?.requestPermission?.()].filter(Boolean);

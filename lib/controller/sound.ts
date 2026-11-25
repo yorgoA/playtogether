@@ -42,6 +42,11 @@ const sounds={
  drum:(c:AudioContext)=>roll(c,2.6),
  step:(c:AudioContext)=>{tone(c,130,0,.3,{to:55,volume:.4});notes(c,[392,523],.06,.25,{type:'triangle'})},
  win:(c:AudioContext)=>{notes(c,[523,523,523,698,880,1047],.16,.5,{type:'sawtooth',volume:.1});[523,659,784,1047].forEach(f=>tone(c,f,1.05,1.6,{type:'triangle',volume:.14}));noise(c,1.05,.9,.2,6000)},
+ draw:(c:AudioContext)=>{noise(c,0,.05,.3,3200);tone(c,1900,.04,.05,{type:'square',volume:.07,to:900})},
+ // A crack, the blast, a low thump and the echo.
+ gunshot:(c:AudioContext)=>{noise(c,0,.07,1,9000);noise(c,0,.34,.9,1500);tone(c,150,0,.3,{volume:.6,to:38});noise(c,.12,.8,.22,700);noise(c,.34,.9,.1,420)},
+ hit:(c:AudioContext)=>{noise(c,0,.12,.5,2600);tone(c,320,0,.5,{type:'sawtooth',volume:.16,to:60})},
+ fall:(c:AudioContext)=>{tone(c,95,0,.25,{volume:.5,to:36});noise(c,0,.2,.4,500)},
  cheer:(c:AudioContext)=>tone(c,500+Math.random()*400,0,.12,{volume:.1,to:1200}),
 };
 export type Sound=keyof typeof sounds;
