@@ -27,6 +27,7 @@ import {
   type MatchContext,
 } from './engine';
 import { activeModule, moduleForAction, moduleForGame, modules } from './modules';
+import { addTiebreak, totalRounds } from './rounds';
 import { bankLeft, islandMove, startIsland, totalPoints } from './island';
 import { active, goal, handSize, pointsFor, resources, type Island } from '../island/board';
 import { botMove } from './island-bot';
@@ -57,6 +58,9 @@ export type Room = {
   players: Player[];
   rounds: number;
   round: number;
+  tiebreaks?: number;
+  // Set when the first tie-break starts: the players tied for first, then those still level.
+  contenders?: string[];
   quiz?: Quiz;
   duel?: Duel;
   cheers?: { n: number; from: string; emoji: string; at: number }[];
@@ -160,6 +164,8 @@ function advance(r: Room, now: number) {
       ? advanceDuel(r, now)
       : false;
   if (moved === 'over') {
+    // A quiz needs a spare question for the extra round. Rooms from before tie-breaks have none.
+    if (addTiebreak(r, !r.quiz || !!r.quiz.rounds[r.round])) return advance(r, now);
     r.phase = 'results';
     r.deadline = 0;
     return true;
@@ -170,6 +176,8 @@ function lobby(r: Room) {
   r.revealing = false;
   r.phase = 'lobby';
   r.round = 0;
+  delete r.tiebreaks;
+  delete r.contenders;
   r.deadline = 0;
   r.signalAt = 0;
   delete r.quiz;
@@ -205,6 +213,15 @@ function removePlayer(r: Room, p: Player, now: number) {
   if (!r.players.length) {
     lobby(r);
     return;
+  }
+  if (r.contenders) {
+    r.contenders = r.contenders.filter((id) => id !== p.id);
+    // The last contender standing wins at once.
+    if (r.contenders.length < 2) {
+      r.phase = 'results';
+      r.deadline = 0;
+      return;
+    }
   }
   if (r.pyramid) {
     const claim = r.pyramid.claim;
@@ -547,8 +564,11 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
     code: r.code,
     game: r.game,
     phase: r.phase,
-    rounds: r.rounds,
+    rounds: totalRounds(r),
     round: r.round,
+    // Only tie-breaks take a match past the rounds chosen in the lobby, where the round is 0.
+    tiebreak: r.round > r.rounds,
+    contenders: r.contenders ?? [],
     deadline: r.deadline,
     signalAt,
     serverTime: now,

@@ -1,6 +1,7 @@
 import type { QuizPower, QuizType, QuizView } from '../contract/rooms';
 import { crossOutAt, introMs, powerMs, quizPowers, quizTypes, revealMs, suspenseMs } from '../quiz/rules';
 import { GameError } from './games';
+import { contends, maxTiebreaks, totalRounds } from './rounds';
 import { ownQuestions, type Question } from './trivia';
 
 export type QuizRound = { theme: string; type: QuizType; text: string; options: string[]; correct: number };
@@ -28,6 +29,8 @@ export type QuizRoom = {
   players: Seat[];
   round: number;
   rounds: number;
+  tiebreaks?: number;
+  contenders?: string[];
   started: number;
   deadline: number;
   revealing?: boolean;
@@ -55,18 +58,28 @@ export function dealPowers(rounds: number, players: number): QuizPower[] {
   return players > 1 ? kit : kit.filter((p) => !quizPowers[p].target && p !== 'mirror');
 }
 
+const safeTypes = (Object.keys(quizTypes) as QuizType[]).filter((t) => t !== 'minefield');
+
 function dealRounds(count: number, supply: Question[], asked: string[]): QuizRound[] {
   const seen = new Set(asked);
   const fresh = supply.filter((q) => !seen.has(q.text));
+  // Questions from earlier matches only fill in once the fresh ones run out.
+  const stale = shuffle(supply.filter((q) => seen.has(q.text)));
   const byTheme = new Map<string, Question[]>();
-  for (const q of fresh.length >= count ? fresh : supply)
+  for (const q of [...fresh, ...stale.slice(0, Math.max(0, count - fresh.length))])
     byTheme.set(q.theme, [...(byTheme.get(q.theme) ?? []), q]);
   let themes: string[] = [];
   let types: QuizType[] = [];
+  let last = '';
   return Array.from({ length: count }, () => {
-    if (!themes.length) themes = shuffle([...byTheme.keys()].filter((t) => byTheme.get(t)!.length));
+    if (!themes.length) {
+      themes = shuffle([...byTheme.keys()].filter((t) => byTheme.get(t)!.length));
+      // Themes are taken from the end, so a new lap never opens on the theme just played.
+      if (themes.length > 1 && themes.at(-1) === last) themes.unshift(themes.pop()!);
+    }
     if (!types.length) types = shuffle(Object.keys(quizTypes) as QuizType[]);
     const theme = themes.pop()!;
+    last = theme;
     const list = byTheme.get(theme)!;
     const q = list.splice(Math.floor(Math.random() * list.length), 1)[0];
     const options = shuffle([q.right, ...q.wrong]);
@@ -75,12 +88,22 @@ function dealRounds(count: number, supply: Question[], asked: string[]): QuizRou
 }
 
 export function startQuiz(r: QuizRoom, supply: Question[], now: number) {
-  const rounds = dealRounds(r.rounds, supply.length ? supply : ownQuestions, r.asked ?? []);
-  r.asked = [...(r.asked ?? []), ...rounds.map((q) => q.text)].slice(-100);
+  const pool = supply.length ? supply : ownQuestions;
+  const asked = r.asked ?? [];
+  // Rounds and spares are dealt together, so a spare repeats neither a question nor, while themes
+  // last, a theme of this match. Spares count as asked only once played.
+  const spares = Math.max(0, Math.min(maxTiebreaks, pool.length - r.rounds));
+  const dealt = dealRounds(r.rounds + spares, pool, asked);
+  const planned = dealt.slice(0, r.rounds);
+  // A tie-break takes no points away, and Minefield does.
+  const spare = dealt
+    .slice(r.rounds)
+    .map((q) => (q.type === 'minefield' ? { ...q, type: shuffle(safeTypes)[0] } : q));
+  r.asked = [...asked, ...planned.map((q) => q.text)].slice(-100);
   const kit = dealPowers(r.rounds, r.players.length);
   r.quiz = {
     stage: 'intro',
-    rounds,
+    rounds: [...planned, ...spare],
     hands: Object.fromEntries(r.players.map((p) => [p.id, [...kit]])),
     chosen: {},
     plays: [],
@@ -102,6 +125,7 @@ function enter(r: QuizRoom, stage: Quiz['stage'], now: number, ms: number) {
 }
 function nextRound(r: QuizRoom, now: number) {
   r.round++;
+  if (r.round > r.rounds) r.asked = [...(r.asked ?? []), roundOf(r).text].slice(-100);
   r.revealing = false;
   Object.assign(r.quiz!, {
     chosen: {},
@@ -153,7 +177,7 @@ function cutoff(r: QuizRoom, id: string) {
 // Skips the wait once everyone who is still here has acted.
 export function hurryQuiz(r: QuizRoom, here: (p: Seat) => boolean, now: number) {
   const q = r.quiz!;
-  const waiting = r.players.filter(here);
+  const waiting = r.players.filter((p) => here(p) && contends(r, p.id));
   if (!waiting.length) return;
   if (q.stage === 'power' && waiting.every((p) => q.chosen[p.id] || !q.hands[p.id]?.length))
     toQuestion(r, now);
@@ -210,6 +234,8 @@ function earnings(r: QuizRoom): Record<string, number> {
       }
     }
   }
+  // Bystanders watch a tie-break: nothing they pick can score.
+  for (const id of ids) if (!contends(r, id)) gains[id] = 0;
   return gains;
 }
 
@@ -223,7 +249,7 @@ export function advanceQuiz(r: QuizRoom, here: (p: Seat) => boolean, now: number
     return q.stage !== before;
   }
   if (q.stage === 'intro') {
-    if (r.players.some((p) => q.hands[p.id]?.length)) enter(r, 'power', now, powerMs);
+    if (r.round <= r.rounds && r.players.some((p) => q.hands[p.id]?.length)) enter(r, 'power', now, powerMs);
     else toQuestion(r, now);
   } else if (q.stage === 'power') toQuestion(r, now);
   else if (q.stage === 'question') toSuspense(r, now);
@@ -235,13 +261,14 @@ export function advanceQuiz(r: QuizRoom, here: (p: Seat) => boolean, now: number
     }
     r.revealing = true;
     enter(r, 'reveal', now, revealMs);
-  } else if (r.round >= r.rounds) return 'over';
+  } else if (r.round >= totalRounds(r)) return 'over';
   else nextRound(r, now);
   return true;
 }
 
 export function choosePower(r: QuizRoom, id: string, command: Record<string, unknown>) {
   const q = r.quiz!;
+  if (r.round > r.rounds) throw new GameError('There are no powers in a tie-break.', 409);
   if (q.stage !== 'power' || command.round !== r.round)
     throw new GameError('Powers are closed for this round.', 409);
   if (q.chosen[id]) return;
@@ -260,6 +287,7 @@ export function choosePower(r: QuizRoom, id: string, command: Record<string, unk
 export function answerQuiz(r: QuizRoom, p: Seat, command: Record<string, unknown>, now: number) {
   const q = r.quiz!;
   if (q.stage !== 'question' || command.round !== r.round) throw new GameError('This round is closed.', 409);
+  if (!contends(r, p.id)) throw new GameError('Only the players tied for first play the tie-break.', 403);
   if (p.answered) return;
   const { value } = command;
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 3)

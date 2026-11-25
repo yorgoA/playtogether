@@ -1,4 +1,5 @@
 import type { DuelView } from '../contract/rooms';
+import { contends, totalRounds } from './rounds';
 
 // A standoff: everyone draws on the signal and the slowest falls, until one is left standing.
 export type Duel = DuelView & { wasted: number };
@@ -15,6 +16,8 @@ export type DuelRoom = {
   players: Seat[];
   round: number;
   rounds: number;
+  tiebreaks?: number;
+  contenders?: string[];
   started: number;
   deadline: number;
   signalAt: number;
@@ -53,7 +56,12 @@ export function rearm(r: DuelRoom, now: number) {
 }
 function newRound(r: DuelRoom, now: number) {
   r.round++;
-  Object.assign(r.duel!, { alive: r.players.map((p) => p.id), winner: null, over: false, wasted: 0 });
+  Object.assign(r.duel!, {
+    alive: r.players.filter((p) => contends(r, p.id)).map((p) => p.id),
+    winner: null,
+    over: false,
+    wasted: 0,
+  });
   newDraw(r, now);
 }
 export function startDuel(r: DuelRoom, now: number) {
@@ -109,7 +117,7 @@ export function advanceDuel(r: DuelRoom, now: number): boolean | 'over' {
   if (now < r.deadline) return false;
   if (!r.revealing) bang(r, now);
   else if (!r.duel!.over) newDraw(r, now);
-  else if (r.round >= r.rounds) return 'over';
+  else if (r.round >= totalRounds(r)) return 'over';
   else newRound(r, now);
   return true;
 }

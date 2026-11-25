@@ -158,7 +158,9 @@ describe('what the server sends fits the contract', () => {
       check(now);
       if (room.quiz!.stage === 'power')
         play(0, { action: 'quizPower', round: 1, power: 'smoke', target: seats[1].id }, now);
-      if (room.quiz!.stage === 'question') play(0, { action: 'input', round: 1, value: 0 }, now);
+      // Right, so the match ends instead of playing a tie-break.
+      if (room.quiz!.stage === 'question')
+        play(0, { action: 'input', round: 1, value: room.quiz!.rounds[0].correct }, now);
       host({ action: 'pause' }, now);
       check(now);
       host({ action: 'resume' }, now);
