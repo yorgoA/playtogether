@@ -8,5 +8,9 @@
     "database_name": "playtogether-local",
     "database_id": "00000000-0000-4000-8000-000000000000",
     "migrations_dir": "./drizzle"
-  }]
+  }],
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "RoomObject" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RoomObject"] }]
 }

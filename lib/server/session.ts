@@ -79,6 +79,8 @@ export type Room = {
   cheers?: { n: number; from: string; emoji: string; at: number }[];
   // Quiz questions this room has had, so a rematch brings new ones.
   asked?: string[];
+  // Kept by a Durable Object, which pushes every change over a WebSocket.
+  live?: boolean;
   botAt?: number;
   island?: Island;
   pyramid?: Pyramid;
@@ -626,6 +628,7 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
     code: r.code,
     game: r.game,
     phase: r.phase,
+    live: !!r.live,
     rounds: totalRounds(r),
     round: r.round,
     // Only tie-breaks take a match past the rounds chosen in the lobby, where the round is 0.

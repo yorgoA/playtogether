@@ -28,6 +28,10 @@ Open the local URL printed in the terminal. The game runs on your computer witho
 
 Stop the development server with Ctrl+C, then run `npm run dev:lan`. Open the local or **Network** URL printed by Vite on the host screen. The QR code uses your computer's Wi-Fi address, so phones on the same Wi-Fi can join. If prompted, allow incoming connections on your private network. Use touch controls on local HTTP. Motion controls may require HTTPS on your phone.
 
+### Try rooms in Durable Objects
+
+A prototype keeps each room in its own Cloudflare Durable Object, which runs timers and bots by itself and pushes every change over a WebSocket. To try it, put `ROOM_HOST=durable` in `.dev.vars` and restart the development server. New rooms then live there instead of D1. Rooms opened before the switch are lost.
+
 ## Working together
 
 | Area | Where to work |

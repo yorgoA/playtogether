@@ -326,6 +326,8 @@ export const RoomSnapshot = z
     code: z.string().length(4),
     game: Game,
     phase: Phase,
+    // True when the room pushes its state over a WebSocket at /api/rooms/:code/live (see `LiveHello`).
+    live: z.boolean(),
     // The rounds chosen in the lobby, plus any tie-break rounds played since.
     rounds: z.number(),
     round: z.number(),

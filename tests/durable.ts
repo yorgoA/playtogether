@@ -1,4 +1,5 @@
 import type { RoomSnapshot } from '../lib/contract';
+import { RoomObject } from '../lib/server/room-object';
 
 // An in-memory stand-in for a Durable Object's state, enough to run `RoomObject` in Node. It proves the room's
 // logic, not workerd itself: no input gates, no hibernation, no real alarms.
@@ -54,4 +55,16 @@ export function fakeState() {
     },
   };
   return { state, store, alarm: () => alarm };
+}
+
+// Stands in for `env.ROOMS`: one room object per name, each with its own in-memory state.
+export function fakeRooms() {
+  const rooms = new Map<string, RoomObject>();
+  return {
+    idFromName: (name: string) => name,
+    get(id: string) {
+      if (!rooms.has(id)) rooms.set(id, new RoomObject(fakeState().state as never, {} as never));
+      return rooms.get(id)!;
+    },
+  };
 }
