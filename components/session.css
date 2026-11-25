@@ -32,3 +32,20 @@
 @media(max-width:680px){.pt-lobby{grid-template-columns:1fr}.pt-session-nav{margin-bottom:18px;padding:16px 0}.pt-room-qr{width:170px}.pt-room-foot{flex-wrap:wrap}}
 .play-floor{padding:clamp(10px,1.4vw,24px);background:#171922}.play-floor>.pt-row{margin:0 4px 10px}
 .pt-bots{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}.pt-bots>div{display:flex;gap:6px}.pt-bots div button{text-transform:capitalize}.pt-bots [aria-pressed=true]{border-color:var(--pt-lime);color:var(--pt-lime)}.pt-person .pt-level{text-transform:capitalize;padding:3px 10px;border-radius:99px;background:#33353f;color:#fff}.pt-level.easy{background:#2b6b3d!important}.pt-level.hard{background:#8f1f2c!important}
+@media(min-width:1600px){.pt-session .pt-notice{margin:0 0 8px;padding:4px 15px}}
+/* TV: these screens size their text in rem, so a bigger root makes all of it readable from a sofa.
+   Other games size their own stage. */
+@media(min-width:1600px){
+ html:has(.pt-session :is(.pt-lobby,.st-table,.po-stage)){font-size:min(1.25vw,2.25vh)}
+ .pt-session:has(.pt-lobby,.po-stage){padding-bottom:12px}
+ .pt-session:has(.pt-lobby,.po-stage) .pt-session-nav{padding:10px 0;margin-bottom:12px}
+ .pt-session:has(.pt-lobby,.po-stage) .pt-game-head{margin-bottom:.6rem}.pt-session:has(.pt-lobby,.po-stage) h1{font-size:2.6rem;margin:0}
+ .pt-session:has(.pt-lobby) .pt-game-head small{font-size:1rem}.pt-session:has(.pt-lobby) .pt-text,.pt-session:has(.pt-lobby) .pt-bots small{font-size:1rem}
+ .pt-session:has(.pt-lobby) .pt-pane{padding:26px 34px}.pt-session .pt-lobby .pt-room-qr{width:min(100%,320px)}
+ .pt-session .pt-lobby .pt-person{padding:7px 0}.pt-session .pt-lobby .pt-person small{font-size:1rem}
+ .pt-session .pt-lobby .pt-roster:has(.pt-person:nth-child(5)){display:grid;grid-template-columns:1fr 1fr;column-gap:30px}
+ .pt-session .pt-lobby .pt-roster:has(.pt-person:nth-child(5)) :is(.pt-person b,small,.pt-text){font-size:.84rem}
+ .pt-session :is(.pt-lobby,.st-table,.po-stage) .pt-avatar{width:2.1rem;height:2.1rem}
+ .pt-session:has(.qz-tv,.du-scene) :is(.pt-secondary,.pt-text,.pt-notice){font-size:min(1.1vw,2vh)}
+ .qz-scores>span{font-size:min(1.25vw,2.25vh)}
+}
