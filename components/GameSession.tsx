@@ -7,6 +7,7 @@ import {PyramidTV} from './PyramidGame';
 import {KingsTV} from './KingsGame';
 import {StormTV} from './StormGame';
 import {QuizTV} from './QuizGame';
+import {roundLabel} from './tiebreak';
 import Podium from './Podium';
 import {Cheers} from './Cheers';
 import {isMuted,setMuted} from '@/lib/controller/sound';
@@ -72,7 +73,7 @@ export default function GameSession({game,onExit}:{game:string,onExit:()=>void})
  <p>{games[room.game].instructions}</p>{room.game==='quiz'&&<p className="qz-credit">Questions from the <a className="pt-text" href="https://opentdb.com" target="_blank" rel="noreferrer">Open Trivia Database</a> (CC BY-SA 4.0).</p>}<button className="pt-primary" disabled={!canStart||busy} onClick={()=>command({action:'start'})}>Start game</button></section></div>
  :over?<section className="pt-pane">{drinking(room.game)?<><h2>{winners.map(p=>p.name).join(' & ')} stayed the most sober!</h2><Ranks room={room}/></>:<Podium room={room}/>}<div className="pt-actions"><button className="pt-primary" disabled={busy} onClick={()=>command({action:'restart'})}>Rematch</button><button className="pt-secondary" disabled={busy} onClick={async()=>{if(await command({action:'lobby'}))onExit()}}>Choose another game</button></div></section>
  :room.phase==='ended'?<section className="pt-pane"><h2>Session ended</h2>{back}</section>
- :<section className="pt-pane play-floor">{room.game!=='settlers'&&room.game!=='storm'&&!drinking(room.game)&&<div className="pt-row"><small>ROUND {room.round} / {room.rounds}</small></div>}
+ :<section className="pt-pane play-floor">{room.game!=='settlers'&&room.game!=='storm'&&!drinking(room.game)&&<div className="pt-row"><small>{roundLabel(room)}</small></div>}
  {room.storm?<StormTV room={room} board={room.storm} now={now}/>:room.game==='kings'&&room.kings?<KingsTV room={room} board={room.kings} command={command} busy={busy}/>:room.game==='pyramid'&&room.pyramid?<PyramidTV room={room} board={room.pyramid} command={command} busy={busy}/>:room.game==='settlers'?<IslandTV room={room}/>:room.quiz?<QuizTV room={room} quiz={room.quiz} now={now}/>:room.duel?<DuelTV room={room} duel={room.duel} go={go}/>:null}
  <div className="pt-actions"><button className="pt-secondary" disabled={busy} onClick={()=>command({action:room.phase==='paused'?'resume':'pause'})}>{room.phase==='paused'?'Resume':'Pause'}</button><button className="pt-secondary" disabled={busy} onClick={()=>command({action:'restart'})}>Restart match</button><button className="pt-secondary" disabled={busy} onClick={()=>command({action:'lobby'})}>Return to lobby</button></div></section>}
  {room.phase!=='ended'&&<footer className="pt-room-foot">{confirm?<><span>End this room for everyone?</span><button className="pt-secondary" onClick={()=>setConfirm(false)}>Cancel</button><button className="pt-secondary" onClick={async()=>{if(await command({action:'end'})){localStorage.removeItem(hostKey);onExit()}}}>End room</button></>:<button className="pt-text" onClick={()=>setConfirm(true)}>End session</button>}</footer>}
