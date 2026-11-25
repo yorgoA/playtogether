@@ -22,7 +22,7 @@ npm run db:local
 npm run dev
 ```
 
-Open the local URL printed in the terminal. The game runs on your computer without an OpenAI API key, a Claude API key, or a hosting account. Room data stays in the local database.
+Open the local URL printed in the terminal. The game runs on your computer without an API key or a hosting account. Room data stays in the local database.
 
 ### Play with phones on Wi-Fi
 
