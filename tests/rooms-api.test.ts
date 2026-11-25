@@ -44,6 +44,27 @@ describe('rooms', () => {
     expect((await json(await view(code.toLowerCase(), joined.playerToken))).room.players[0].name).toBe('Ana');
     expect(sqlite.prepare('SELECT version FROM rooms').get()).toEqual({ version: 3 });
   });
+  it('plays a Storm Deck turn through the stored state, showing each hand only to its owner', async () => {
+    const { code, hostToken } = await newRoom('storm');
+    const seats = [];
+    for (const name of ['Ana', 'Bo']) {
+      const joined = await send(code, { action: 'join', name });
+      await send(code, { action: 'ready', ready: true }, joined.playerToken);
+      seats.push(joined);
+    }
+    const { room } = await send(code, { action: 'start' }, hostToken);
+    expect(room.storm.hand).toBeUndefined();
+    const first = seats.find((seat) => seat.playerId === room.storm.turn)!;
+    const other = seats.find((seat) => seat !== first)!;
+    const drawn = await send(code, { action: 'storm', move: 'draw', seq: room.storm.seq }, first.playerToken);
+    expect(drawn.room.storm).toMatchObject({ seq: 1, turn: other.playerId });
+    expect(drawn.room.storm.hand).toHaveLength(8);
+    const seen = (await json(await view(code, other.playerToken))).room.storm;
+    expect(seen.hand).toHaveLength(7);
+    expect(seen.sizes[first.playerId]).toBe(8);
+    const stale = await send(code, { action: 'storm', move: 'draw', seq: 0 }, other.playerToken);
+    expect(stale.error).toBe('The table has moved on.');
+  });
   it('keeps secrets out of what a player can read', async () => {
     const { code, hostToken } = await newRoom();
     const joined = await send(code, { action: 'join', name: 'Ana' });

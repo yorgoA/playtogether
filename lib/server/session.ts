@@ -16,17 +16,17 @@ import {
   settleRace,
   type Kings,
 } from './kings';
+import { stormModule, type Storm } from './storm';
 import {
-  leaveStorm,
-  newStorm,
-  stormMove,
-  stormOver,
-  stormScore,
-  stormTimeout,
-  stormView,
-  turnMs,
-  type Storm,
-} from './storm';
+  clearMatch,
+  leaveMatch,
+  playMatch,
+  startMatch,
+  tickMatch,
+  viewMatch,
+  type MatchContext,
+} from './engine';
+import { activeModule, moduleForAction, moduleForGame, modules } from './modules';
 import { bankLeft, islandMove, startIsland, totalPoints } from './island';
 import { active, goal, handSize, pointsFor, resources, type Island } from '../island/board';
 import { botMove } from './island-bot';
@@ -75,6 +75,10 @@ export type Room = {
 };
 type Command = Record<string, unknown>;
 const connected = (p: Player, now: number) => !!p.bot || now - p.lastSeen < 25000;
+const context = (r: Room, now: number): MatchContext => ({
+  now,
+  connected: r.players.filter((p) => connected(p, now)).map((p) => p.id),
+});
 // Phones learn the signal before it fires, so every screen can show it together. Long enough for a slow
 // phone to lose a message and ask again, and shorter than the shortest wait (2 s).
 const signalLeadMs = 1800;
@@ -141,22 +145,9 @@ function advanceBots(r: Room, now: number) {
 function drink(r: Room, poured: ReturnType<typeof kingsMove>) {
   for (const p of r.players) if (poured?.drinkers.includes(p.id)) p.score -= poured.amount;
 }
-function afterStorm(r: Room, seq: number, now: number) {
-  const s = r.storm!;
-  if (s.seq !== seq) r.deadline = now + turnMs;
-  if (!stormOver(s)) return;
-  r.phase = 'results';
-  r.deadline = 0;
-  for (const p of r.players) p.score = stormScore(s, p.id);
-}
 function advance(r: Room, now: number) {
-  if (r.phase === 'playing' && r.storm) {
-    if (now < r.deadline) return false;
-    const { seq } = r.storm;
-    stormTimeout(r.storm);
-    afterStorm(r, seq, now);
-    return true;
-  }
+  const engine = activeModule(r);
+  if (engine) return tickMatch(engine, r, context(r, now));
   if (r.phase === 'playing' && r.kings) {
     const poured = settleRace(r.kings, now);
     drink(r, poured);
@@ -186,7 +177,7 @@ function lobby(r: Room) {
   delete r.island;
   delete r.pyramid;
   delete r.kings;
-  delete r.storm;
+  for (const m of modules) clearMatch(m, r);
   r.players.forEach((p) => {
     p.answered = false;
     p.reactionMs = undefined;
@@ -228,10 +219,9 @@ function removePlayer(r: Room, p: Player, now: number) {
   }
   // While paused, the deadline moves forward on resume.
   const at = r.phase === 'paused' ? r.pausedAt : now;
-  if (r.storm) {
-    const { turn } = r.storm;
-    leaveStorm(r.storm, p.id);
-    afterStorm(r, turn === p.id ? -1 : r.storm.seq, at);
+  const engine = activeModule(r);
+  if (engine) {
+    leaveMatch(engine, r, p.id, context(r, at));
     return;
   }
   if (r.duel) {
@@ -248,6 +238,11 @@ function start(r: Room, now: number, questions: Question[]) {
     throw new GameError('Every player must be connected and ready.');
   lobby(r);
   r.phase = 'playing';
+  const engine = moduleForGame(r.game);
+  if (engine) {
+    startMatch(engine, r, context(r, now));
+    return;
+  }
   if (r.game === 'pyramid') {
     r.pyramid = newPyramid(r.players.map((p) => p.id));
     return;
@@ -255,10 +250,6 @@ function start(r: Room, now: number, questions: Question[]) {
   if (r.game === 'kings') {
     r.kings = newKings(r.players.map((p) => p.id));
     return;
-  }
-  if (r.game === 'storm') {
-    r.storm = newStorm(r.players.map((p) => p.id));
-    r.deadline = now + turnMs;
   }
   if (r.game === 'quiz') startQuiz(r, questions, now);
   if (r.game === 'reaction') startDuel(r, now);
@@ -340,6 +331,7 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
   }
   if (action === 'view') return { dirty: advanceBots(r, now) || dirty, extras };
   if (r.phase === 'ended') throw new GameError('The host has ended this room.', 410);
+  const engine = moduleForAction(action);
   if (action === 'cheer' && player) {
     const recent = (r.cheers ?? []).filter((c) => now - c.at < cheerMs);
     const moment =
@@ -383,11 +375,8 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
     );
     drink(r, poured);
     if (kingsOver(r.kings)) r.phase = 'results';
-  } else if (action === 'storm' && player) {
-    if (!r.storm || r.phase !== 'playing') throw new GameError('Storm Deck is not active.', 409);
-    const { seq } = r.storm;
-    stormMove(r.storm, player.id, command);
-    afterStorm(r, seq, now);
+  } else if (engine && player) {
+    playMatch(engine, r, player.id, command, context(r, now));
   } else if (action === 'input' && player) {
     if (r.game === 'storm') throw new GameError('Use the Storm Deck controls.');
     if (r.game === 'settlers') throw new GameError('Use the island controls.');
@@ -524,6 +513,7 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
 }
 export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
   const viewer = r.players.find((p) => p.token === token);
+  const host = !!token && token === r.hostToken;
   const board = r.island;
   const island = board
     ? (({ hands, deck, dev, ...publicBoard }) => ({
@@ -543,7 +533,7 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
   const signalAt = r.signalAt && clock >= r.signalAt - signalLeadMs ? r.signalAt : null;
   const quiz =
     r.quiz && (r.phase === 'playing' || r.phase === 'paused')
-      ? quizView(r, viewer?.id, !!token && token === r.hostToken, clock)
+      ? quizView(r, viewer?.id, host, clock)
       : undefined;
   // Who shot when stays secret until the smoke clears.
   const shotsShown = !r.duel || !!r.revealing;
@@ -551,7 +541,7 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
     island,
     pyramid: r.pyramid ? pyramidView(r.pyramid, viewer?.id) : undefined,
     kings: r.kings ? kingsView(r.kings) : undefined,
-    storm: r.storm ? stormView(r.storm, viewer?.id) : undefined,
+    storm: viewMatch(stormModule, r, { id: viewer?.id, host }),
     quiz: quiz?.view,
     duel: r.duel ? duelView(r.duel) : undefined,
     code: r.code,

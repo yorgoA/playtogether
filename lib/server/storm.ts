@@ -1,5 +1,6 @@
 import type { StormView } from '../contract';
 import { elements, fits, highest, isPower, stormLimit } from '../storm/rules';
+import type { GameModule } from './engine';
 import { GameError } from './games';
 
 export type Storm = {
@@ -161,3 +162,18 @@ export function stormView(s: Storm, viewer?: string): StormView {
     hand: viewer ? s.hands[viewer] : undefined,
   };
 }
+
+export const stormModule: GameModule<Storm, StormView> = {
+  game: 'storm',
+  action: 'storm',
+  key: 'storm',
+  turnMs,
+  start: newStorm,
+  move: stormMove,
+  timeout: stormTimeout,
+  turn: (s) => s.turn,
+  leave: leaveStorm,
+  over: stormOver,
+  score: stormScore,
+  view: (s, viewer) => stormView(s, viewer.id),
+};
