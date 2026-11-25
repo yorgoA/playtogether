@@ -1,12 +1,13 @@
 'use client';
 import type {DuelView} from '@/lib/contract';
 import type {Player,Room} from '@/lib/controller/room';
+import {plays,rivalNames,rivals} from './tiebreak';
 import './duel.css';
 type Props={room:Room,duel:DuelView,go:boolean};
 const why={slow:'too slow',early:'jumped the gun',silent:'never drew'};
 const nameOf=(room:Room,id:string|null)=>room.players.find(p=>p.id===id)?.name??'Someone';
 function news(room:Room,duel:DuelView,go:boolean):[string,string]{
- if(!room.revealing)return go?['DRAW!','']:[duel.alive.length===2?'Final showdown…':'Steady…','Wait for the signal.'];
+ if(!room.revealing)return go?['DRAW!','']:room.tiebreak?['Tie-break…',rivalNames(room)]:[duel.alive.length===2?'Final showdown…':'Steady…','Wait for the signal.'];
  const fell=duel.fallen.map(f=>nameOf(room,f.id)+' ('+why[f.why]+')').join(', ');
  if(duel.winner)return [nameOf(room,duel.winner)+' wins the round!',fell];
  if(duel.over)return ['Nobody wins this round','Too many misfires.'];
@@ -28,13 +29,13 @@ function Cowboy({p,x,size,dead,now,shooting,flip,wins,note}:{p:Player,x:number,s
  </div>;
 }
 export function DuelTV({room,duel,go}:Props){
- const [title,text]=news(room,duel,go),n=room.players.length,reveal=!!room.revealing;
+ const [title,text]=news(room,duel,go),shown=rivals(room),n=shown.length,reveal=!!room.revealing;
  const fastest=reveal?room.players.filter(p=>p.reactionMs!=null).sort((a,b)=>a.reactionMs!-b.reactionMs!)[0]?.id:undefined;
  return <div className={'du-scene'+(go&&!reveal?' go':'')+(reveal&&duel.fallen.length?' bang':'')} key={duel.draw}>
   <div className="du-sun"/><svg className="du-town" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true"><path d="M0 300V190l90-60 130 80 120-140 140 130h120l150-110 130 120 140-90 180 100v80z" fill="#8f3f3a"/><path d="M0 300V120h70V80h130v40h60v180zM940 300V140h60V70h120v70h80v160z" fill="#4b2226"/><g fill="#ffc46b"><path d="M30 160h26v40H30zM110 120h30v46h-30zM170 180h30v50h-30zM970 180h24v44h-24zM1040 110h32v46h-32zM1120 190h30v46h-30z"/></g></svg>
   <div className="du-ground"/>
   <div className="du-title" role="status"><h2>{title}</h2><p>{text||' '}</p></div>
-  {room.players.map((p,i)=>{
+  {shown.map((p,i)=>{
    const x=n===1?50:10+i*80/(n-1),alive=duel.alive.includes(p.id),now=reveal&&duel.fallen.some(f=>f.id===p.id);
    const ms=reveal&&p.early?'Misfire':reveal&&p.reactionMs!=null?p.reactionMs+' ms':'';
    return <Cowboy key={p.id} p={p} x={x} size={Math.min(17,78/n)} dead={!alive} now={now} shooting={reveal&&(p.id===fastest||(alive&&p.reactionMs!=null))&&duel.fallen.length>0} flip={x>50} wins={duel.wins[p.id]??0} note={ms}/>;
@@ -45,11 +46,12 @@ export function DuelTV({room,duel,go}:Props){
 }
 export function DuelPhone({room,duel,go,id,sending,shoot}:Props&{id:string,sending:boolean,shoot:()=>void}){
  const me=room.players.find(p=>p.id===id),fell=duel.fallen.find(f=>f.id===id),alive=duel.alive.includes(id);
+ if(!plays(room,id))return <div className="du-phone out"><h2>⚔️ Tie-break</h2><p>{rivalNames(room)}</p><p>You’re watching this one. Cheer them on!</p></div>;
  if(room.revealing){
-  const [title,text]=duel.winner===id?['🏆 Last one standing!','You win the round.']:fell?['💀 You’re hit!',(fell.by?nameOf(room,fell.by)+' got you: ':'')+why[fell.why]+'.']:alive?duel.fallen.length?['😮‍💨 You survived',duel.alive.length===2?'One rival left.':'Get ready to draw again.']:['Stalemate','Draw again.']:['💀 Out',duel.winner?nameOf(room,duel.winner)+' wins the round.':'Back next round.'];
+  const [title,text]=duel.winner===id?['🏆 Last one standing!','You win the round.']:fell?['💀 You’re hit!',(fell.by?nameOf(room,fell.by)+' got you: ':'')+why[fell.why]+'.']:alive?duel.fallen.length?['😮‍💨 You survived',duel.alive.length===2?'One rival left.':'Get ready to draw again.']:['Stalemate','Draw again.']:['💀 Out',duel.winner?nameOf(room,duel.winner)+' wins the round.':room.tiebreak?'Watch the TV.':'Back next round.'];
   return <div className={'du-phone '+(fell?'hit':alive?'safe':'out')}><h2>{title}</h2><p>{text}</p>{me?.reactionMs!=null&&<b>{me.reactionMs} ms</b>}</div>;
  }
- if(!alive)return <div className="du-phone out"><h2>💀 You’re out</h2><p>You are back in the next round. {duel.alive.length} still standing.</p></div>;
+ if(!alive)return <div className="du-phone out"><h2>💀 You’re out</h2><p>{room.tiebreak?'':'You are back in the next round. '}{duel.alive.length} still standing.</p></div>;
  if(me?.answered)return <div className="du-phone"><h2>{me.early?'Misfire!':'Shot fired'}</h2><p>{me.early?'You drew before the signal.':'Watch the TV…'}</p></div>;
- return <div className="du-phone"><h2>{duel.alive.length===2?'Final showdown':duel.alive.length+' standing'}</h2><button className={'du-trigger'+(go?' go':'')} disabled={sending} onPointerDown={shoot} onClick={e=>{if(e.detail===0)shoot()}}>{sending?'SHOT!':go?'SHOOT!':'STEADY…'}</button><p>The slowest one falls. Too soon is a misfire.</p></div>;
+ return <div className="du-phone"><h2>{room.tiebreak?'⚔️ Tie-break':duel.alive.length===2?'Final showdown':duel.alive.length+' standing'}</h2><button className={'du-trigger'+(go?' go':'')} disabled={sending} onPointerDown={shoot} onClick={e=>{if(e.detail===0)shoot()}}>{sending?'SHOT!':go?'SHOOT!':'STEADY…'}</button><p>The slowest one falls. Too soon is a misfire.</p></div>;
 }

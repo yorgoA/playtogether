@@ -9,7 +9,7 @@ export const scoreText=(game:GameId,score:number)=>drinking(game)?Math.abs(score
 export const avatars=['🦊','🐼','🐸','🐙','🐯','🐨','🐧','🐱'];
 export const colors=['#c3f76a','#bc96ff','#ffae65','#ff83b1','#69dafa','#ffdf75'];
 export type Player={bot?:boolean,standIn?:boolean,early?:boolean,reactionMs?:number,gained?:number,id:string,name:string,color:string,avatar:string,score:number,ready:boolean,connected:boolean,answered:boolean};
-export type Room={cheers:{n:number,from:string,emoji:string}[],quiz?:QuizView,duel?:DuelView,pausedAt:number,pyramid?:PyramidView,kings?:KingsView,storm?:StormView,island?:import('../island/board').BoardView,revealing?:boolean,correct?:number|null,code:string,game:GameId,round:number,rounds:number,phase:'lobby'|'playing'|'paused'|'results'|'ended',question:{text:string,options:string[]}|null,deadline:number,signalAt:number|null,serverTime:number,players:Player[]};
+export type Room={cheers:{n:number,from:string,emoji:string}[],quiz?:QuizView,duel?:DuelView,pausedAt:number,pyramid?:PyramidView,kings?:KingsView,storm?:StormView,island?:import('../island/board').BoardView,revealing?:boolean,correct?:number|null,code:string,game:GameId,round:number,rounds:number,tiebreak:boolean,contenders:string[],phase:'lobby'|'playing'|'paused'|'results'|'ended',question:{text:string,options:string[]}|null,deadline:number,signalAt:number|null,serverTime:number,players:Player[]};
 export type Seat={code:string,token:string,game?:string,id?:string};
 export const hostKey='playtogether.host';
 export const phoneKey='playtogether.phone';
