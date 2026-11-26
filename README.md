@@ -28,6 +28,17 @@ Open the local URL printed in the terminal. The game runs on your computer witho
 
 Stop the development server with Ctrl+C, then run `npm run dev:lan`. Open the local or **Network** URL printed by Vite on the host screen. The QR code uses your computer's Wi-Fi address, so phones on the same Wi-Fi can join. If prompted, allow incoming connections on your private network. Use touch controls on local HTTP. Motion controls may require HTTPS on your phone.
 
+## Put it online
+
+Every push to `main` that passes CI deploys to Cloudflare Workers (`.github/workflows/deploy.yml`): it builds, applies the database migrations, then deploys. Until the two secrets below exist, the workflow only notes that it skipped. Setting it up once:
+
+1. With the project's Cloudflare account, open **Workers & Pages** in the dashboard once, so the account gets its `workers.dev` subdomain.
+2. Run `npx wrangler login`, then `npx wrangler d1 create playtogether`. In `wrangler.jsonc`, replace `database_name` and `database_id` with the values it prints, and merge that change. The id is not a secret. Run `npm run db:local` again afterwards: the local database follows the id.
+3. In the dashboard, under **My Profile → API Tokens**, create a token from the **Edit Cloudflare Workers** template and add the **D1: Edit** permission.
+4. In the GitHub repository, under **Settings → Secrets and variables → Actions**, add `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (shown on the Workers & Pages overview). This needs admin access to the repository.
+
+The next merge to `main` puts the game at `https://playtogether.<subdomain>.workers.dev`. Phones join over HTTPS there, so motion controls work too.
+
 ## Working together
 
 | Area | Where to work |
