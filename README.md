@@ -28,6 +28,22 @@ Open the local URL printed in the terminal. The game runs on your computer witho
 
 Stop the development server with Ctrl+C, then run `npm run dev:lan`. Open the local or **Network** URL printed by Vite on the host screen. The QR code uses your computer's Wi-Fi address, so phones on the same Wi-Fi can join. If prompted, allow incoming connections on your private network. Use touch controls on local HTTP. Motion controls may require HTTPS on your phone.
 
+## Put it online
+
+The game runs on Cloudflare Workers in two environments, set in `wrangler.jsonc`. Each has its own D1 database.
+
+| Environment | Address | Deployed |
+| --- | --- | --- |
+| Staging | `https://playtogether-staging.playtogether-hq.workers.dev` | After every push to `main` that passes CI |
+| Production | `https://playtogether.playtogether-hq.workers.dev` | By hand: **Actions → Deploy → Run workflow** on `main` |
+
+`.github/workflows/deploy.yml` builds for the environment, applies its database migrations, then deploys. Try a change on staging before you run the workflow for production. Phones join over HTTPS on both, so motion controls work too.
+
+The workflow uses two repository secrets, `CLOUDFLARE_ACCOUNT_ID` (shown on the Workers & Pages overview) and `CLOUDFLARE_API_TOKEN`. Without them, it only notes that it skipped. To create or replace the token:
+
+1. In the project's Cloudflare dashboard, under **My Profile → API Tokens**, create a token from the **Edit Cloudflare Workers** template. Add the **D1: Edit** permission, limit the account policy to the project's account, and remove the zone policy: the game has no domain of its own.
+2. Run `gh secret set CLOUDFLARE_API_TOKEN --repo yorgoA/playtogether` and paste the token when asked. Any collaborator can do this from the command line. The **Settings** page of the repository needs admin access.
+
 ## Working together
 
 | Area | Where to work |
