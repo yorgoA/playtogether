@@ -30,14 +30,19 @@ Stop the development server with Ctrl+C, then run `npm run dev:lan`. Open the lo
 
 ## Put it online
 
-Every push to `main` that passes CI deploys to Cloudflare Workers (`.github/workflows/deploy.yml`): it builds, applies the database migrations, then deploys. Until the two secrets below exist, the workflow only notes that it skipped. Setting it up once:
+The game runs on Cloudflare Workers in two environments, set in `wrangler.jsonc`. Each has its own D1 database.
 
-1. With the project's Cloudflare account, open **Workers & Pages** in the dashboard once, so the account gets its `workers.dev` subdomain.
-2. Run `npx wrangler login`, then `npx wrangler d1 create playtogether`. In `wrangler.jsonc`, replace `database_name` and `database_id` with the values it prints, and merge that change. The id is not a secret. Run `npm run db:local` again afterwards: the local database follows the id.
-3. In the dashboard, under **My Profile → API Tokens**, create a token from the **Edit Cloudflare Workers** template and add the **D1: Edit** permission.
-4. In the GitHub repository, under **Settings → Secrets and variables → Actions**, add `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (shown on the Workers & Pages overview). This needs admin access to the repository.
+| Environment | Address | Deployed |
+| --- | --- | --- |
+| Staging | `https://playtogether-staging.playtogether-hq.workers.dev` | After every push to `main` that passes CI |
+| Production | `https://playtogether.playtogether-hq.workers.dev` | By hand: **Actions → Deploy → Run workflow** on `main` |
 
-The next merge to `main` puts the game at `https://playtogether.<subdomain>.workers.dev`. Phones join over HTTPS there, so motion controls work too.
+`.github/workflows/deploy.yml` builds for the environment, applies its database migrations, then deploys. Try a change on staging before you run the workflow for production. Phones join over HTTPS on both, so motion controls work too.
+
+Until the two secrets below exist, the workflow only notes that it skipped. To set them once:
+
+1. In the project's Cloudflare dashboard, under **My Profile → API Tokens**, create a token from the **Edit Cloudflare Workers** template and add the **D1: Edit** permission.
+2. In the GitHub repository, under **Settings → Secrets and variables → Actions**, add `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (shown on the Workers & Pages overview). This needs admin access to the repository.
 
 ## Working together
 
