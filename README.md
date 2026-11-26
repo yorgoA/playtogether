@@ -39,10 +39,10 @@ The game runs on Cloudflare Workers in two environments, set in `wrangler.jsonc`
 
 `.github/workflows/deploy.yml` builds for the environment, applies its database migrations, then deploys. Try a change on staging before you run the workflow for production. Phones join over HTTPS on both, so motion controls work too.
 
-Until the two secrets below exist, the workflow only notes that it skipped. To set them once:
+The workflow uses two repository secrets, `CLOUDFLARE_ACCOUNT_ID` (shown on the Workers & Pages overview) and `CLOUDFLARE_API_TOKEN`. Without them, it only notes that it skipped. To create or replace the token:
 
-1. In the project's Cloudflare dashboard, under **My Profile → API Tokens**, create a token from the **Edit Cloudflare Workers** template and add the **D1: Edit** permission.
-2. In the GitHub repository, under **Settings → Secrets and variables → Actions**, add `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (shown on the Workers & Pages overview). This needs admin access to the repository.
+1. In the project's Cloudflare dashboard, under **My Profile → API Tokens**, create a token from the **Edit Cloudflare Workers** template. Add the **D1: Edit** permission, limit the account policy to the project's account, and remove the zone policy: the game has no domain of its own.
+2. Run `gh secret set CLOUDFLARE_API_TOKEN --repo yorgoA/playtogether` and paste the token when asked. Any collaborator can do this from the command line. The **Settings** page of the repository needs admin access.
 
 ## Working together
 
