@@ -16,10 +16,11 @@
     "db:local": "wrangler d1 migrations apply DB --local --persist-to .wrangler/state",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write app/api lib/server lib/island db tests scripts/check-migrations.mjs vitest.config.ts vite.config.ts drizzle.config.ts",
-    "format:check": "prettier --check app/api lib/server lib/island db tests scripts/check-migrations.mjs vitest.config.ts vite.config.ts drizzle.config.ts",
-    "check": "npm run lint && npm run format:check && npm run typecheck && npm run db:verify && npm test && npm run build",
+    "format": "prettier --write app/api lib/server lib/island db tests scripts/check-migrations.mjs scripts/check-worker-size.mjs vitest.config.ts vite.config.ts drizzle.config.ts",
+    "format:check": "prettier --check app/api lib/server lib/island db tests scripts/check-migrations.mjs scripts/check-worker-size.mjs vitest.config.ts vite.config.ts drizzle.config.ts",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm run db:verify && npm test && npm run build && npm run size",
     "db:verify": "drizzle-kit check && node scripts/check-migrations.mjs",
+    "size": "node scripts/check-worker-size.mjs",
     "test:live": "vitest run tests/simulation/live.test.ts"
   },
   "dependencies": {
