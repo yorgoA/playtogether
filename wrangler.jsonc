@@ -5,8 +5,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [{
     "binding": "DB",
-    "database_name": "playtogether-local",
-    "database_id": "00000000-0000-4000-8000-000000000000",
+    "database_name": "playtogether",
+    "database_id": "589494fe-16b6-4471-a53d-ddfc598ec06a",
     "migrations_dir": "./drizzle"
   }]
 }
