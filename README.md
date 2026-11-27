@@ -39,6 +39,8 @@ The game runs on Cloudflare Workers in two environments, set in `wrangler.jsonc`
 
 `.github/workflows/deploy.yml` builds for the environment, applies its database migrations, then deploys. Try a change on staging before you run the workflow for production. Phones join over HTTPS on both, so motion controls work too.
 
+Staging is private. Its pages and API ask for a password once per device, then a cookie keeps you in for 30 days. The password is the `STAGING_PASSWORD` secret of the `playtogether-staging` Worker: in the Cloudflare dashboard, **Workers & Pages → playtogether-staging → Settings → Variables and Secrets**. Changing it signs everyone out. Production and local development have no such secret, so they stay open. Static files such as images and scripts are served without the password: they are in this public repository anyway.
+
 The workflow uses two repository secrets, `CLOUDFLARE_ACCOUNT_ID` (shown on the Workers & Pages overview) and `CLOUDFLARE_API_TOKEN`. Without them, it only notes that it skipped. To create or replace the token:
 
 1. In the project's Cloudflare dashboard, under **My Profile → API Tokens**, create a token from the **Edit Cloudflare Workers** template. Add the **D1: Edit** permission, limit the account policy to the project's account, and remove the zone policy: the game has no domain of its own.
