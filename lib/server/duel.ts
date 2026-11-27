@@ -3,7 +3,7 @@ import { contends, totalRounds } from './rounds';
 
 // A standoff: everyone draws on the signal and the slowest falls, until one is left standing.
 // `aims` holds each bot's plan for this draw: its reaction time, or `early` when it jumps the gun.
-export type Aim = { ms: number } | { early: true };
+type Aim = { ms: number } | { early: true };
 export type Duel = DuelView & { wasted: number; aims?: Record<string, Aim> };
 type Seat = {
   bot?: boolean;
@@ -55,7 +55,7 @@ function planBots(r: DuelRoom) {
   }
 }
 
-export function newDraw(r: DuelRoom, now: number) {
+function newDraw(r: DuelRoom, now: number) {
   const d = r.duel!;
   // Never reused, so a shot that arrives late cannot count in the next draw.
   d.draw++;
