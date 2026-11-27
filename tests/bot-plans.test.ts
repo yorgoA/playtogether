@@ -45,7 +45,8 @@ async function start(game: string, level: string) {
 
 describe('bot plans in stored rooms', () => {
   it('keeps a duel bot on the same reaction across requests until it shoots', async () => {
-    const { code, phone, host } = await start('reaction', 'normal');
+    // A hard bot never jumps the gun, so its plan always has a reaction time.
+    const { code, phone, host } = await start('reaction', 'hard');
     await send(code, { action: 'start' }, host);
     const { aims } = stored().duel;
     const [botId] = Object.keys(aims);
