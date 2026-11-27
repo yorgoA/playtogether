@@ -1,4 +1,5 @@
 import type { PyramidView } from '../contract';
+import type { GameModule } from './engine';
 import { GameError } from './games';
 
 import { pyramidLevels } from '../pyramid/layout';
@@ -11,6 +12,10 @@ export type Pyramid = {
   index: number;
   claim: Claim | null;
   outcome: Outcome | null;
+  // Who is still at the table, and the sips each player owes. Matches started before these were kept have
+  // neither, so they fall back to the hands and to no sips.
+  players?: string[];
+  sips?: Record<string, number>;
 };
 
 export function newPyramid(players: string[]): Pyramid {
@@ -25,17 +30,18 @@ export function newPyramid(players: string[]): Pyramid {
     index: -1,
     claim: null,
     outcome: null,
+    players,
+    sips: {},
   };
 }
 
-export function flipPyramid(board: Pyramid, index: unknown) {
+function flipPyramid(board: Pyramid, index: unknown) {
   if (index !== board.index || board.claim) throw new GameError('Wait for the current card to finish.', 409);
   board.index++;
   board.outcome = null;
-  return board.index === board.cards.length;
 }
 
-export function claimPyramid(
+function claimPyramid(
   board: Pyramid,
   from: string,
   to: unknown,
@@ -53,7 +59,7 @@ export function claimPyramid(
   board.claim = { from, to, slot };
 }
 
-export function resolvePyramid(board: Pyramid, player: string, call: boolean, index: unknown) {
+function resolvePyramid(board: Pyramid, player: string, call: boolean, index: unknown) {
   const claim = board.claim;
   if (index !== board.index || claim?.to !== player)
     throw new GameError('This claim is no longer waiting for you.', 409);
@@ -75,7 +81,7 @@ export function resolvePyramid(board: Pyramid, player: string, call: boolean, in
   return board.outcome;
 }
 
-export function pyramidView(board: Pyramid, player?: string): PyramidView {
+function pyramidView(board: Pyramid, player?: string): PyramidView {
   const hand = player ? board.hands[player] : undefined;
   return {
     index: board.index,
@@ -86,3 +92,31 @@ export function pyramidView(board: Pyramid, player?: string): PyramidView {
     slots: hand?.map(Boolean),
   };
 }
+
+// The host turns the cards. A player claims a match with a card from their hand against another player, who
+// accepts or calls the bluff. Scores are the sips owed, as negative points, shown while the match goes on.
+export const pyramidModule: GameModule<Pyramid, PyramidView> = {
+  game: 'pyramid',
+  action: ['pyramidClaim', 'pyramidReply'],
+  key: 'pyramid',
+  liveScores: true,
+  start: (players) => newPyramid(players),
+  move(board, playerId, command, ctx) {
+    if (command.action === 'pyramidClaim')
+      claimPyramid(board, playerId, command.target, command.slot, command.index, ctx.connected);
+    else {
+      const { loser, points } = resolvePyramid(board, playerId, command.call === true, command.index);
+      board.sips = { ...board.sips, [loser]: (board.sips?.[loser] ?? 0) + points };
+    }
+  },
+  host: { action: 'pyramidFlip', move: (board, command) => flipPyramid(board, command.index) },
+  leave(board, playerId) {
+    const claim = board.claim;
+    if (claim && (claim.from === playerId || claim.to === playerId)) board.claim = null;
+    board.players = (board.players ?? Object.keys(board.hands)).filter((id) => id !== playerId);
+  },
+  over: (board) =>
+    board.index === board.cards.length || (board.players ?? Object.keys(board.hands)).length < 2,
+  score: (board, playerId) => -(board.sips?.[playerId] ?? 0),
+  view: (board, viewer) => pyramidView(board, viewer.id),
+};

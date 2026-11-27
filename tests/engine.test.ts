@@ -3,8 +3,10 @@ import { gameIds, RoomSnapshot, type Difficulty } from '../lib/contract';
 import {
   botDelayMs,
   clearMatch,
+  hostMatch,
   leaveMatch,
   playMatch,
+  playsWith,
   startMatch,
   tickMatch,
   viewMatch,
@@ -161,6 +163,58 @@ describe('Game engine', () => {
     playMatch(counting, room, 'a', {}, at());
     expect(viewMatch(counting, room, { id: 'a', host: false })).toEqual({ turn: 'b', mine: 1 });
     expect(viewMatch(counting, room, { host: true })).toEqual({ turn: 'b', mine: undefined });
+  });
+});
+
+describe('Game engine options', () => {
+  // A host turns the rounds on; players score with either of two commands.
+  type Rounds = { round: number; points: Record<string, number> };
+  const rounds: GameModule<Rounds, Rounds> = {
+    game: 'pyramid',
+    action: ['plus', 'double'],
+    key: 'rounds',
+    liveScores: true,
+    start: () => ({ round: 0, points: {} }),
+    move(s, id, command) {
+      const now = s.points[id] ?? 0;
+      s.points[id] = command.action === 'double' ? Math.max(1, now * 2) : now + 1;
+    },
+    host: { action: 'next', move: (s) => void s.round++ },
+    leave() {},
+    over: (s) => s.round === 2,
+    score: (s, id) => s.points[id] ?? 0,
+    view: (s) => s,
+  };
+  function setup() {
+    const room: MatchRoom & { rounds?: Rounds } = {
+      phase: 'playing',
+      started: 0,
+      deadline: 0,
+      players: [
+        { id: 'a', score: 0 },
+        { id: 'b', score: 0 },
+      ],
+    };
+    startMatch(rounds, room, at());
+    return room;
+  }
+
+  it("takes any of a game's commands, and shows the scores after every move", () => {
+    const room = setup();
+    expect(playsWith(rounds, 'plus') && playsWith(rounds, 'double') && !playsWith(rounds, 'next')).toBe(true);
+    playMatch(rounds, room, 'a', { action: 'plus' }, at());
+    playMatch(rounds, room, 'a', { action: 'double' }, at());
+    expect(room.players.map((p) => p.score)).toEqual([2, 0]);
+    expect(room.phase).toBe('playing');
+  });
+
+  it("lets the host move the match on, and ends it like a player's move would", () => {
+    const room = setup();
+    hostMatch(rounds, room, { action: 'next' }, at());
+    expect(room.rounds!.round).toBe(1);
+    hostMatch(rounds, room, { action: 'next' }, at());
+    expect(room.phase).toBe('results');
+    expect(() => hostMatch(rounds, room, { action: 'next' }, at())).toThrow('Pyramid is not active.');
   });
 });
 
