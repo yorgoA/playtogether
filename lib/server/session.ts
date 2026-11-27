@@ -26,17 +26,7 @@ import type { Question } from './trivia';
 import { botSeats, gameIds, type Difficulty, type RoomSnapshot } from '../contract';
 import { botColors, botLevel, botName } from './bots';
 import { pyramidModule, type Pyramid } from './pyramid';
-import {
-  kingsMove,
-  kingsOver,
-  kingsView,
-  leaveKings,
-  newKings,
-  nextKings,
-  resumeKings,
-  settleRace,
-  type Kings,
-} from './kings';
+import { kingsModule, type Kings } from './kings';
 import { stormModule, type Storm } from './storm';
 import {
   clearMatch,
@@ -45,6 +35,7 @@ import {
   matchWakes,
   hostMatch,
   playMatch,
+  resumeMatch,
   startMatch,
   tickMatch,
   viewMatch,
@@ -208,23 +199,14 @@ export function nextWake(r: Room, now: number): number | null {
         ...(r.quiz ? quizWakes(r) : []),
         ...(r.duel ? duelWakes(r) : []),
         islandBots ? (r.botAt ?? 0) : 0,
-        r.kings?.raceUntil ?? 0,
       ];
   // Anything already due was handled by the tick that came before.
   const due = times.filter((t) => t > now);
   return due.length ? Math.min(...due) : null;
 }
-function drink(r: Room, poured: ReturnType<typeof kingsMove>) {
-  for (const p of r.players) if (poured?.drinkers.includes(p.id)) p.score -= poured.amount;
-}
 function advance(r: Room, now: number) {
   const engine = activeModule(r);
   if (engine) return tickMatch(engine, r, context(r, now));
-  if (r.phase === 'playing' && r.kings) {
-    const poured = settleRace(r.kings, now);
-    drink(r, poured);
-    return !!poured;
-  }
   if (r.phase !== 'playing') return false;
   // Bots act first, so an answer planned before the deadline still counts.
   const { bots } = context(r, now);
@@ -262,7 +244,6 @@ function lobby(r: Room) {
   delete r.quiz;
   delete r.duel;
   delete r.island;
-  delete r.kings;
   for (const m of modules) clearMatch(m, r);
   r.players.forEach((p) => {
     p.answered = false;
@@ -311,11 +292,6 @@ function removePlayer(r: Room, p: Player, now: number) {
       return;
     }
   }
-  if (r.kings) {
-    leaveKings(r.kings, p.id);
-    if (r.players.length < 2 || kingsOver(r.kings)) r.phase = 'results';
-    return;
-  }
   // While paused, the deadline moves forward on resume.
   const at = r.phase === 'paused' ? r.pausedAt : now;
   const engine = activeModule(r);
@@ -340,10 +316,6 @@ function start(r: Room, now: number, questions: Question[]) {
   const engine = moduleForGame(r.game);
   if (engine) {
     startMatch(engine, r, context(r, now));
-    return;
-  }
-  if (r.game === 'kings') {
-    r.kings = newKings(r.players.map((p) => p.id));
     return;
   }
   if (r.game === 'quiz') startQuiz(r, questions, now);
@@ -444,17 +416,6 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
     if (!r.island || r.phase !== 'playing')
       throw new GameError(r.phase === 'paused' ? 'The game is paused.' : 'The match is not active.', 409);
     playIsland(r, player, command, now);
-  } else if (action === 'kings' && player) {
-    if (!r.kings || r.phase !== 'playing') throw new GameError('Kings Cup is not active.', 409);
-    const poured = kingsMove(
-      r.kings,
-      player.id,
-      command,
-      r.players.filter((p) => connected(p, now)).map((p) => p.id),
-      now,
-    );
-    drink(r, poured);
-    if (kingsOver(r.kings)) r.phase = 'results';
   } else if (engine && player) {
     playMatch(engine, r, player.id, command, context(r, now));
   } else if (action === 'input' && player) {
@@ -528,12 +489,6 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
           throw new GameError('A match is already in progress.');
         start(r, now, questions);
         break;
-      case 'kingsNext':
-        if (!r.kings || r.phase !== 'playing' || command.seq !== r.kings.seq)
-          throw new GameError('The table has moved on.', 409);
-        nextKings(r.kings);
-        if (kingsOver(r.kings)) r.phase = 'results';
-        break;
       case 'restart':
         start(r, now, questions);
         break;
@@ -552,7 +507,8 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
           for (const pick of Object.values(r.quiz.picks)) if (r.quiz.stage === 'question') pick.at += delta;
         // A fresh signal keeps resuming from giving away the moment.
         if (r.duel) rearm(r, now);
-        if (r.kings) resumeKings(r.kings, delta);
+        const engine = activeModule(r);
+        if (engine) resumeMatch(engine, r, delta);
         r.phase = 'playing';
         break;
       }
@@ -617,7 +573,7 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
   return {
     island,
     pyramid: viewMatch(pyramidModule, r, { id: viewer?.id, host }),
-    kings: r.kings ? kingsView(r.kings) : undefined,
+    kings: viewMatch(kingsModule, r, { id: viewer?.id, host }),
     storm: viewMatch(stormModule, r, { id: viewer?.id, host }),
     quiz: quiz?.view,
     duel: r.duel ? duelView(r.duel) : undefined,

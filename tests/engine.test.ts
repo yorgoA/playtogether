@@ -4,9 +4,11 @@ import {
   botDelayMs,
   clearMatch,
   hostMatch,
+  matchWakes,
   leaveMatch,
   playMatch,
   playsWith,
+  resumeMatch,
   startMatch,
   tickMatch,
   viewMatch,
@@ -215,6 +217,40 @@ describe('Game engine options', () => {
     hostMatch(rounds, room, { action: 'next' }, at());
     expect(room.phase).toBe('results');
     expect(() => hostMatch(rounds, room, { action: 'next' }, at())).toThrow('Pyramid is not active.');
+  });
+});
+
+describe('Game engine clocks of its own', () => {
+  // A fuse burns out at a set time, with no turn clock; pausing pushes it back.
+  type Fuse = { at: number; burnt: boolean };
+  const fuse: GameModule<Fuse, Fuse> = {
+    game: 'kings',
+    action: 'light',
+    key: 'fuse',
+    start: (_, ctx) => ({ at: ctx.now + 3000, burnt: false }),
+    move() {},
+    wake: (s) => (s.burnt ? 0 : s.at),
+    tick(s, ctx) {
+      if (s.burnt || ctx.now < s.at) return false;
+      s.burnt = true;
+      return true;
+    },
+    resume: (s, ms) => void (s.at += ms),
+    leave() {},
+    over: (s) => s.burnt,
+    score: () => 0,
+    view: (s) => s,
+  };
+
+  it("wakes at the game's own moment, acts then, and moves that moment on after a pause", () => {
+    const room: MatchRoom & { fuse?: Fuse } = { phase: 'playing', started: 0, deadline: 0, players: [] };
+    startMatch(fuse, room, at());
+    expect(matchWakes(fuse, room, at())).toContain(T0 + 3000);
+    expect(tickMatch(fuse, room, at(T0 + 2999))).toBe(false);
+    resumeMatch(fuse, room, 1000);
+    expect(tickMatch(fuse, room, at(T0 + 3999))).toBe(false);
+    expect(tickMatch(fuse, room, at(T0 + 4000))).toBe(true);
+    expect(room.phase).toBe('results');
   });
 });
 

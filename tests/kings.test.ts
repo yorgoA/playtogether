@@ -4,7 +4,7 @@ import { POST as account } from '../app/api/profile/route';
 import { POST as roomPost } from '../app/api/rooms/[code]/route';
 import { POST as createRoute } from '../app/api/rooms/route';
 import { raceGraceMs } from '../lib/server/kings';
-import { mutate, snapshot } from '../lib/server/session';
+import { mutate, newRoom, nextWake, snapshot, type Room } from '../lib/server/session';
 import { cookieFrom, json, post } from './api-helpers';
 import { useDatabase } from './database';
 import { T0, table } from './helpers';
@@ -215,6 +215,44 @@ describe('Kings Cup', () => {
     expect(board.order).toEqual([id(0), id(2)]);
     expect(board.order[board.turn]).toBe(id(2));
     expect(board.mates).toEqual([]);
+  });
+
+  it('settles a race with the room saved and read back between every request', () => {
+    // As D1 or a Durable Object does: nothing survives a request but what the room stores.
+    let stored = JSON.stringify(newRoom('ABCD', { game: 'kings' }));
+    const room = () => JSON.parse(stored) as Room;
+    const call = (command: Record<string, unknown>, token: string, now = T0) => {
+      const r = room();
+      const { extras } = mutate(r, command, token, now);
+      stored = JSON.stringify(r);
+      return extras;
+    };
+    const host = room().hostToken;
+    const seats = ['Ana', 'Bo', 'Cy'].map((name) => {
+      const { playerToken } = call({ action: 'join', name }, '');
+      call({ action: 'ready', ready: true }, playerToken);
+      return playerToken;
+    });
+    call({ action: 'start' }, host);
+    // A 4 on top starts a race for everyone.
+    const r = room();
+    const at = r.kings!.deck.indexOf('4S');
+    [r.kings!.deck[0], r.kings!.deck[at]] = [r.kings!.deck[at], r.kings!.deck[0]];
+    stored = JSON.stringify(r);
+    const seq = () => room().kings!.seq;
+    call({ action: 'kings', move: 'draw', slot: 0, seq: seq() }, seats[0]);
+    call({ action: 'kings', move: 'tap', ms: 400, seq: seq() }, seats[0], T0 + 500);
+    call({ action: 'kings', move: 'tap', ms: 500, seq: seq() }, seats[1], T0 + 600);
+    // Cy never taps: the room wakes when the last phone runs out of time, and Cy drinks.
+    const until = room().kings!.raceUntil!;
+    expect(until).toBe(T0 + 600 + raceGraceMs);
+    expect(nextWake(room(), T0 + 700)).toBe(until);
+    call({ action: 'view' }, host, until - 1);
+    expect(room().kings!.phase).toBe('race');
+    call({ action: 'view' }, host, until);
+    expect(room().kings!.phase).toBe('open');
+    expect(room().players.map((p) => p.score)).toEqual([0, 0, -1]);
+    expect(RoomSnapshot.parse(snapshot(room(), until, host)).kings?.event?.drinkers).toHaveLength(1);
   });
 });
 

@@ -28,6 +28,12 @@ export type GameModule<S, V> = {
   liveScores?: boolean;
   start(players: string[], ctx: MatchContext): S;
   move(state: S, playerId: string, command: Command, ctx: MatchContext): void;
+  // A moment the game acts by itself, outside any turn clock, such as the end of a race. 0 when none is due.
+  wake?(state: S): number;
+  // What the game does at that moment. Returns whether the match changed.
+  tick?(state: S, ctx: MatchContext): boolean;
+  // Moves the game's own clocks on by `ms` when a paused match resumes.
+  resume?(state: S, ms: number): void;
   // A command only the host screen may send, such as turning the next card.
   host?: { action: string; move(state: S, command: Command, ctx: MatchContext): void };
   // Plays for the player who ran out of time.
@@ -101,6 +107,7 @@ export function matchWakes<S, V>(m: GameModule<S, V>, r: MatchRoom, ctx: MatchCo
   return [
     turn && ctx.bots[turn] && m.bot ? r.started + botDelayMs : 0,
     m.turnMs && m.timeout ? r.deadline : 0,
+    m.wake?.(state) ?? 0,
   ];
 }
 
@@ -108,6 +115,10 @@ export function matchWakes<S, V>(m: GameModule<S, V>, r: MatchRoom, ctx: MatchCo
 export function tickMatch<S, V>(m: GameModule<S, V>, r: MatchRoom, ctx: MatchContext) {
   const state = matchOf(m, r);
   if (!state || r.phase !== 'playing') return false;
+  if (m.tick?.(state, ctx)) {
+    settle(m, r, state, ctx.now, false);
+    return true;
+  }
   const turn = m.turn?.(state);
   const level = turn ? ctx.bots[turn] : undefined;
   if (turn && level && m.bot && ctx.now >= r.started + botDelayMs) {
@@ -136,6 +147,11 @@ export function leaveMatch<S, V>(m: GameModule<S, V>, r: MatchRoom, playerId: st
   const theirs = m.turn?.(state) === playerId;
   m.leave(state, playerId, ctx);
   settle(m, r, state, ctx.now, theirs);
+}
+
+export function resumeMatch<S, V>(m: GameModule<S, V>, r: MatchRoom, ms: number) {
+  const state = matchOf(m, r);
+  if (state !== undefined) m.resume?.(state, ms);
 }
 
 // Back to the lobby: the match is gone.
