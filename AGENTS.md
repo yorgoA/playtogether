@@ -9,6 +9,8 @@ Several people and AI agents work here at the same time. These rules keep their 
 | Frontend | `app/page.tsx`, `app/layout.tsx`, `app/join/`, `app/globals.css`, `components/`, `public/`, `lib/controller/`, `lib/catalog.ts` |
 | Backend | `app/api/`, `lib/server/`, `lib/contract/`, `lib/island/`, `db/`, `drizzle/`, `worker/`, `tests/`, `.github/`, config files in the root |
 
+`.github/CODEOWNERS` follows this table, so GitHub asks the owner of each area to review the pull requests that touch it.
+
 Change only your own area. When a task needs the other area, such as a new API field, stop and say what you need so its owner can make the change. A small edit that cannot land separately is fine if the pull request description points it out.
 
 `lib/island/board.ts` runs on the server and on phones. It is backend-owned, and changes to its exports need a matching frontend change.

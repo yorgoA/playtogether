@@ -11,8 +11,8 @@ export default function MotionControls({onShake}:{onShake:()=>void}){
   if(!enabled)return;
   return observeShake(()=>level.current,()=>callback.current(),()=>{setEnabled(false);setMessage('No motion data received. Touch controls are ready.')});
  },[enabled]);
- async function enable(){setWorking(true);try{await allowSensors();setEnabled(true);setMessage('Give your phone a small shake to shoot.')}catch(e){setMessage(e instanceof Error?e.message:'Motion is unavailable. Touch controls are ready.')}finally{setWorking(false)}}
- return <section className="pt-motion"><button className="pt-text" aria-expanded={open} onClick={()=>setOpen(!open)}>Controller settings · {enabled?'Shake + touch':'Touch'}</button>
+ async function enable(){setWorking(true);try{await allowSensors();setEnabled(true);setMessage('Flick your phone to shoot. Hold it still until the signal.')}catch(e){setMessage(e instanceof Error?e.message:'Motion is unavailable. Touch controls are ready.')}finally{setWorking(false)}}
+ return <section className="pt-motion">{!enabled&&!open&&<p>Want to shoot by flicking your phone?</p>}<button className="pt-text" aria-expanded={open} onClick={()=>setOpen(!open)}>Controller settings · {enabled?'Shake + touch':'Touch'}</button>
  {open&&<div className="pt-motion-settings"><button className="pt-secondary" disabled={working} onClick={()=>enabled?(setEnabled(false),setMessage('Touch controls active.')):enable()}>{enabled?'Use touch only':'Enable shake'}</button>
  {enabled&&<label>Sensitivity <input type="range" min=".5" max="2" step=".1" value={sensitivity} onChange={e=>adjust(Number(e.target.value))}/></label>}
  {message&&<p role="status">{message}</p>}</div>}</section>

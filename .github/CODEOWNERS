@@ -1,0 +1,40 @@
+# Follows "Who owns what" in AGENTS.md: GitHub asks the owner of an area to review
+# a pull request that touches it. Files outside that table have no owner.
+
+# Frontend
+/app/page.tsx @yorgoA
+/app/layout.tsx @yorgoA
+/app/join/ @yorgoA
+/app/globals.css @yorgoA
+/components/ @yorgoA
+/public/ @yorgoA
+/lib/controller/ @yorgoA
+/lib/catalog.ts @yorgoA
+
+# Backend
+/app/api/ @arthurkalman-tech
+/lib/server/ @arthurkalman-tech
+/lib/contract/ @arthurkalman-tech
+/lib/island/ @arthurkalman-tech
+/db/ @arthurkalman-tech
+/drizzle/ @arthurkalman-tech
+/worker/ @arthurkalman-tech
+/tests/ @arthurkalman-tech
+/.github/ @arthurkalman-tech
+
+# Backend: config files in the root
+/.npmrc @arthurkalman-tech
+/.prettierignore @arthurkalman-tech
+/.prettierrc.json @arthurkalman-tech
+/cloudflare-env.d.ts @arthurkalman-tech
+/components.json @arthurkalman-tech
+/drizzle.config.ts @arthurkalman-tech
+/eslint.config.mjs @arthurkalman-tech
+/next.config.ts @arthurkalman-tech
+/package.json @arthurkalman-tech
+/package-lock.json @arthurkalman-tech
+/postcss.config.mjs @arthurkalman-tech
+/tsconfig.json @arthurkalman-tech
+/vite.config.ts @arthurkalman-tech
+/vitest.config.ts @arthurkalman-tech
+/wrangler.jsonc @arthurkalman-tech

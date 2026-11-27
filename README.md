@@ -32,6 +32,22 @@ Stop the development server with Ctrl+C, then run `npm run dev:lan`. Open the lo
 
 A prototype keeps each room in its own Cloudflare Durable Object, which runs timers and bots by itself and pushes every change over a WebSocket. To try it, put `ROOM_HOST=durable` in `.dev.vars` and restart the development server. New rooms then live there instead of D1. Rooms opened before the switch are lost.
 
+## Put it online
+
+The game runs on Cloudflare Workers in two environments, set in `wrangler.jsonc`. Each has its own D1 database.
+
+| Environment | Address | Deployed |
+| --- | --- | --- |
+| Staging | `https://playtogether-staging.playtogether-hq.workers.dev` | After every push to `main` that passes CI |
+| Production | `https://playtogether.playtogether-hq.workers.dev` | By hand: **Actions → Deploy → Run workflow** on `main` |
+
+`.github/workflows/deploy.yml` builds for the environment, applies its database migrations, then deploys. Try a change on staging before you run the workflow for production. Phones join over HTTPS on both, so motion controls work too.
+
+The workflow uses two repository secrets, `CLOUDFLARE_ACCOUNT_ID` (shown on the Workers & Pages overview) and `CLOUDFLARE_API_TOKEN`. Without them, it only notes that it skipped. To create or replace the token:
+
+1. In the project's Cloudflare dashboard, under **My Profile → API Tokens**, create a token from the **Edit Cloudflare Workers** template. Add the **D1: Edit** permission, limit the account policy to the project's account, and remove the zone policy: the game has no domain of its own.
+2. Run `gh secret set CLOUDFLARE_API_TOKEN --repo yorgoA/playtogether` and paste the token when asked. Any collaborator can do this from the command line. The **Settings** page of the repository needs admin access.
+
 ## Working together
 
 | Area | Where to work |

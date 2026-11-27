@@ -1,0 +1,28 @@
+name: CodeQL
+# Looks for security flaws in the TypeScript, such as injections or unchecked input. Findings show on the pull request.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Every Monday, so new CodeQL rules also run on code nobody touched.
+    - cron: '0 6 * * 1'
+permissions:
+  contents: read
+  security-events: write
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          build-mode: none
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:javascript-typescript

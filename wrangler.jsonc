@@ -3,14 +3,29 @@
   "main": "./worker/index.ts",
   "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat"],
+  // Production. Local development uses the same binding, emulated on your machine.
   "d1_databases": [{
     "binding": "DB",
-    "database_name": "playtogether-local",
-    "database_id": "00000000-0000-4000-8000-000000000000",
+    "database_name": "playtogether",
+    "database_id": "589494fe-16b6-4471-a53d-ddfc598ec06a",
     "migrations_dir": "./drizzle"
   }],
   "durable_objects": {
     "bindings": [{ "name": "ROOMS", "class_name": "RoomObject" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RoomObject"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RoomObject"] }],
+  "env": {
+    // Worker playtogether-staging. Bindings are not inherited, so each one is repeated here.
+    "staging": {
+      "d1_databases": [{
+        "binding": "DB",
+        "database_name": "playtogether-staging",
+        "database_id": "ca151631-1ec4-436c-9789-e2b8220c60e0",
+        "migrations_dir": "./drizzle"
+      }],
+      "durable_objects": {
+        "bindings": [{ "name": "ROOMS", "class_name": "RoomObject" }]
+      }
+    }
+  }
 }
