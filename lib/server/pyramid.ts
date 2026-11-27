@@ -117,6 +117,6 @@ export const pyramidModule: GameModule<Pyramid, PyramidView> = {
   },
   over: (board) =>
     board.index === board.cards.length || (board.players ?? Object.keys(board.hands)).length < 2,
-  score: (board, playerId) => -(board.sips?.[playerId] ?? 0),
+  score: (board, playerId) => 0 - (board.sips?.[playerId] ?? 0),
   view: (board, viewer) => pyramidView(board, viewer.id),
 };

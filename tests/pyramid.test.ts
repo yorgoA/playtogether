@@ -52,6 +52,8 @@ describe('Pyramid room', () => {
     expect(() => ana.send({ action: 'pyramidReply', index: 0, call: true })).toThrow('waiting for you');
     reply(true);
     expect(board.outcome).toMatchObject({ verdict: 'bluff', loser: ana.id, points: 2, card: '2H' });
+    // Shown at once, and 0 rather than -0 for whoever has not drunk.
+    expect(room.players.map((player) => player.score)).toEqual([-2, 0]);
     ana.send({ action: 'pyramidClaim', index: 0, slot: 3, target: sam.id });
     reply(false);
     expect(board.outcome).toMatchObject({ verdict: 'accepted', points: 1 });
