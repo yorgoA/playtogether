@@ -135,7 +135,10 @@ export type RoomCommand = z.infer<typeof RoomCommand>;
 
 // ---- Live rooms: GET /api/rooms/:code/live opens a WebSocket ------------------------------------------
 
-// The first and only message a screen sends on it: its player or host token, kept out of the URL.
+// The first message a screen sends on it, within 5 s: its player or host token, kept out of the URL.
+// After that, the screen sends the text `ping` every 10 s and gets `pong` back. A socket that sends no hello is
+// closed with code 4001, one silent for 25 s with 4008 (the player then shows as gone), and every socket with
+// 4004 once the room has ended. A screen that loses its socket opens a new one.
 export const LiveHello = z.object({ token: z.string().max(60) }).strict();
 
 // ---- Responses -----------------------------------------------------------------------------------------

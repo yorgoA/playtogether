@@ -4,9 +4,25 @@ import { RoomObject } from '../lib/server/room-object';
 // An in-memory stand-in for a Durable Object's state, enough to run `RoomObject` in Node. It proves the room's
 // logic, not workerd itself: no input gates, no hibernation, no real alarms.
 
+// The runtime's ping/pong pair, which Node does not have.
+if (!('WebSocketRequestResponsePair' in globalThis))
+  Object.assign(globalThis, {
+    WebSocketRequestResponsePair: class {
+      constructor(
+        readonly request: string,
+        readonly response: string,
+      ) {}
+    },
+  });
+
 export class FakeSocket {
   sent: Record<string, unknown>[] = [];
   closed?: number;
+  // When the runtime last answered this socket's `ping`.
+  pongAt?: number;
+  get readyState() {
+    return this.closed === undefined ? WebSocket.OPEN : WebSocket.CLOSING;
+  }
   private attachment: unknown = null;
   send(message: string) {
     this.sent.push(JSON.parse(message));
@@ -52,6 +68,10 @@ export function fakeState() {
     },
     getWebSockets() {
       return sockets.filter((ws) => ws.closed === undefined);
+    },
+    setWebSocketAutoResponse() {},
+    getWebSocketAutoResponseTimestamp(ws: FakeSocket) {
+      return ws.pongAt === undefined ? null : new Date(ws.pongAt);
     },
   };
   return { state, store, alarm: () => alarm };

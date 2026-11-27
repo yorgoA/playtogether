@@ -130,12 +130,15 @@ describe('room in a Durable Object', () => {
     expect(ws.closed).toBe(4003);
   });
 
-  it('counts a phone with an open socket as here, with no request for a minute', async () => {
+  it('counts a phone with an open socket as here while it pings, with no request for a minute', async () => {
     const { host, join, socket } = await opened();
     const ana = await join('Ana');
     const bo = await join('Bo');
-    await socket(ana.playerToken);
-    now += 60_000;
+    const phone = await socket(ana.playerToken);
+    for (let i = 0; i < 6; i++) {
+      now += 10_000;
+      phone.pongAt = now;
+    }
     const { body } = await host({ action: 'view' });
     const connected = Object.fromEntries(
       (body.room as { players: { id: string; connected: boolean }[] }).players.map((p) => [
@@ -153,9 +156,49 @@ describe('room in a Durable Object', () => {
     const phone = await socket(ana.playerToken);
     await room.webSocketClose(phone as never);
     expect(fake.alarm()).toBeLessThanOrEqual(now + 25_100);
+    tv.pongAt = now + 10_000;
     now = fake.alarm()!;
     await room.alarm();
     expect(tv.last()!.room!.players[0]).toMatchObject({ id: ana.playerId, connected: false });
+  });
+
+  it('closes a socket that names no seat within 5 s, waking for it', async () => {
+    const { fake, room, join } = await opened();
+    const silent = new FakeSocket();
+    silent.serializeAttachment({ opened: now });
+    fake.state.acceptWebSocket(silent);
+    await join('Ana');
+    expect(fake.alarm()).toBe(now + 5_100);
+    now = fake.alarm()!;
+    await room.alarm();
+    expect(silent.closed).toBe(4001);
+  });
+
+  it('closes a phone that stops pinging, and tells the others it has gone', async () => {
+    const { fake, room, join, socket, hostToken } = await opened();
+    const ana = await join('Ana');
+    const tv = await socket(hostToken);
+    const phone = await socket(ana.playerToken);
+    // The phone loses its network without a goodbye; the TV keeps pinging.
+    expect(fake.alarm()).toBe(now + 25_100);
+    tv.pongAt = now + 10_000;
+    tv.pongAt = now + 20_000;
+    now = fake.alarm()!;
+    await room.alarm();
+    expect(phone.closed).toBe(4008);
+    expect(tv.closed).toBeUndefined();
+    expect(tv.last()!.room!.players[0]).toMatchObject({ id: ana.playerId, connected: false });
+    expect(fake.alarm()).toBe(tv.pongAt + 25_100);
+  });
+
+  it('closes every socket once the room has expired', async () => {
+    const { fake, room, socket, hostToken } = await opened();
+    const tv = await socket(hostToken);
+    now += roomTtlMs;
+    tv.pongAt = now;
+    await room.alarm();
+    expect(tv.closed).toBe(4004);
+    expect(fake.store.size).toBe(0);
   });
 
   it('forgets the room once it expires', async () => {

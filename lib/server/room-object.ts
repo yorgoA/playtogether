@@ -6,14 +6,23 @@ import type { Question } from './trivia';
 
 // What the room answers the Worker, which sends it on as is. `questions` asks for the quiz's questions first.
 export type RoomReply = { status: number; body: Record<string, unknown>; questions?: true };
-type Socket = { token?: string };
+// `opened` until the hello names a seat, then `token` and when it said hello.
+type Socket = { token?: string; opened?: number; seen?: number };
 // A phone that stops answering counts as gone after this long, so the room wakes then to tell the others.
 const presenceMs = 25_000;
+// A socket must name its seat this soon after opening, or it is closed.
+const helloMs = 5_000;
 
 // One room. It keeps its state in its own storage and handles one call at a time, so it needs no version lock.
 // An alarm wakes it for deadlines and bots, and it pushes each open socket its own view whenever it changes.
 // Nothing is kept in fields: the object may sleep between calls, sockets included.
 export class RoomObject extends DurableObject {
+  constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
+    super(ctx, env);
+    // Screens send `ping` every 10 s. The runtime answers without waking the room and keeps the time.
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
+  }
+
   // Refuses a code still in use. The Worker then tries another.
   async create(room: Room): Promise<boolean> {
     const now = Date.now();
@@ -30,7 +39,8 @@ export class RoomObject extends DurableObject {
     // Fetching questions here would let another call slip in between reading and saving the room.
     if (starting && r.game === 'quiz' && token === r.hostToken && !questions)
       return { status: 200, body: {}, questions: true };
-    const here = stillHere(r, this.tokens(), now);
+    this.sweep(now);
+    const here = stillHere(r, this.tokens(now), now);
     try {
       const { dirty, extras } = mutate(r, command, token, now, questions);
       if (dirty || here) await this.save(r, now);
@@ -44,11 +54,17 @@ export class RoomObject extends DurableObject {
 
   async alarm() {
     const now = Date.now();
+    this.sweep(now);
     const r = await this.load(now);
-    if (!r) return;
+    if (!r) {
+      for (const ws of this.sockets()) ws.close(4004, 'Room closed');
+      return;
+    }
     try {
-      const here = stillHere(r, this.tokens(), now);
-      if (tick(r, now) || here) await this.save(r, now);
+      // The room wakes every ping window while sockets are open, so fresher presence alone is not saved:
+      // the next call works it out again from the sockets.
+      stillHere(r, this.tokens(now), now);
+      if (tick(r, now)) await this.save(r, now);
       else {
         // Nothing to save, but who is connected may have changed: wake for what comes next and show it.
         await this.wake(r, now, (await this.ctx.storage.get<number>('expires'))!);
@@ -66,7 +82,9 @@ export class RoomObject extends DurableObject {
       return Response.json({ error: 'Open this address as a WebSocket.' }, { status: 426 });
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({} satisfies Socket);
+    const now = Date.now();
+    server.serializeAttachment({ opened: now } satisfies Socket);
+    await this.wakeBy(now + helloMs + 100);
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -86,24 +104,61 @@ export class RoomObject extends DurableObject {
       return;
     }
     const { token } = checked.data;
-    ws.serializeAttachment({ token } satisfies Socket);
+    ws.serializeAttachment({ token, seen: now } satisfies Socket);
     if (stillHere(r, [token], now)) await this.save(r, now);
-    else ws.send(JSON.stringify({ room: snapshot(r, now, token) }));
+    else {
+      ws.send(JSON.stringify({ room: snapshot(r, now, token) }));
+      await this.wakeBy(now + presenceMs + 100);
+    }
   }
 
   // The others learn the player has gone once the presence window has passed.
   async webSocketClose(ws: WebSocket) {
     ws.close();
-    const wake = Date.now() + presenceMs + 100;
-    const alarm = await this.ctx.storage.getAlarm();
-    if (alarm === null || alarm > wake) await this.ctx.storage.setAlarm(wake);
+    await this.wakeBy(Date.now() + presenceMs + 100);
   }
 
-  private tokens() {
-    return this.ctx
-      .getWebSockets()
-      .map((ws) => (ws.deserializeAttachment() as Socket | null)?.token)
-      .filter((token): token is string => !!token);
+  // Sockets still open: one closed earlier in this call stays listed until the call ends.
+  private sockets() {
+    return this.ctx.getWebSockets().filter((ws) => ws.readyState === WebSocket.OPEN);
+  }
+
+  // Seats with a socket that said hello and answered a ping, or said hello, within the presence window.
+  private tokens(now: number) {
+    return this.sockets().flatMap((ws) => {
+      const s = ws.deserializeAttachment() as Socket | null;
+      return s?.token && now - this.lastHeard(ws, s) < presenceMs ? [s.token] : [];
+    });
+  }
+
+  private lastHeard(ws: WebSocket, s: Socket) {
+    return Math.max(s.seen ?? 0, this.ctx.getWebSocketAutoResponseTimestamp(ws)?.getTime() ?? 0);
+  }
+
+  // Closes a socket that never said hello, and one that stopped pinging: a phone gone without a goodbye,
+  // which would otherwise count as here until the connection times out.
+  private sweep(now: number) {
+    for (const ws of this.sockets()) {
+      const s = (ws.deserializeAttachment() as Socket | null) ?? {};
+      if (!s.token && now - (s.opened ?? 0) >= helloMs) ws.close(4001, 'No hello');
+      else if (s.token && now - this.lastHeard(ws, s) >= presenceMs) ws.close(4008, 'No ping');
+    }
+  }
+
+  // The next check of the sockets: a hello due, or a ping missed.
+  private checkAt(now: number) {
+    let at = Infinity;
+    for (const ws of this.sockets()) {
+      const s = (ws.deserializeAttachment() as Socket | null) ?? {};
+      const due = s.token ? this.lastHeard(ws, s) + presenceMs : (s.opened ?? now) + helloMs;
+      at = Math.min(at, Math.max(due, now) + 100);
+    }
+    return at;
+  }
+
+  private async wakeBy(at: number) {
+    const alarm = await this.ctx.storage.getAlarm();
+    if (alarm === null || alarm > at) await this.ctx.storage.setAlarm(at);
   }
 
   private async load(now: number) {
@@ -124,13 +179,13 @@ export class RoomObject extends DurableObject {
     this.show(r, now);
   }
 
-  // One alarm covers the next deadline or bot move, and the room's end.
+  // One alarm covers the next deadline or bot move, the next socket check, and the room's end.
   private async wake(r: Room, now: number, expires: number) {
-    await this.ctx.storage.setAlarm(Math.min(nextWake(r, now) ?? expires, expires));
+    await this.ctx.storage.setAlarm(Math.min(nextWake(r, now) ?? expires, this.checkAt(now), expires));
   }
 
   private show(r: Room, now: number) {
-    for (const ws of this.ctx.getWebSockets()) {
+    for (const ws of this.sockets()) {
       const token = (ws.deserializeAttachment() as Socket | null)?.token;
       if (!token) continue;
       if (knows(r, token)) ws.send(JSON.stringify({ room: snapshot(r, now, token) }));
