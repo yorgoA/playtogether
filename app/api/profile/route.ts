@@ -26,6 +26,15 @@ type Row = {
   password_hash: string;
 };
 const sessionSeconds = 86400;
+// A TV is not something you sign in to every night.
+const tvSessionSeconds = 90 * 86400;
+// How long a TV's code waits for a phone, and how many codes and approvals one address may try in 15 minutes.
+const pairSeconds = 300;
+const pairStarts = 10;
+const pairApprovals = 10;
+const pairCookie = 'pt_pair';
+// No I, O, 0 or 1, which read alike on a TV. 32 letters, so every byte maps without bias.
+const codeLetters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const avatars = ['🦊', '🐼', '🐙', '🦉'];
 // Wrong passwords allowed for one name, and requests from one address, in 15 minutes.
 const wrongPasswords = 5;
@@ -53,7 +62,11 @@ async function guess(row: Row | null, password: string, key: string) {
   else await hit(key, wrongPasswords, window);
   return { wait: 0, good };
 }
-async function startSession(req: Request, profile: Row | Omit<Row, 'salt' | 'password_hash'>) {
+async function startSession(
+  req: Request,
+  profile: Row | Omit<Row, 'salt' | 'password_hash'>,
+  seconds = sessionSeconds,
+) {
   const session = crypto.randomUUID();
   await env.DB.batch([
     env.DB.prepare('DELETE FROM profile_sessions WHERE expires<=? OR token=?').bind(
@@ -63,11 +76,85 @@ async function startSession(req: Request, profile: Row | Omit<Row, 'salt' | 'pas
     env.DB.prepare('INSERT INTO profile_sessions VALUES(?,?,?)').bind(
       await hashToken(session),
       profile.id,
-      Date.now() + sessionSeconds * 1000,
+      Date.now() + seconds * 1000,
     ),
   ]);
   return reply({ profile: publicProfile(profile) }, 200, {
-    'Set-Cookie': sessionCookie(req, session, sessionSeconds),
+    'Set-Cookie': sessionCookie(req, session, seconds),
+  });
+}
+
+// The TV's secret for its code, sent only to /api/profile.
+function pairSecretCookie(req: Request, value: string, seconds: number) {
+  const secure = new URL(req.url).protocol === 'https:' ? '; Secure' : '';
+  return `${pairCookie}=${value}; Path=/api/profile; HttpOnly; SameSite=Strict; Max-Age=${seconds}${secure}`;
+}
+const pairSecret = (req: Request) =>
+  req.headers
+    .get('cookie')
+    ?.split(';')
+    .map((v) => v.trim())
+    .find((v) => v.startsWith(pairCookie + '='))
+    ?.slice(pairCookie.length + 1) || '';
+const pairCode = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(6)), (v) => codeLetters[v % 32]).join('');
+
+// Signing a TV in from a phone: the TV starts, a signed-in phone approves the code, then the TV claims a session.
+// Knowing the code is not enough to claim it: that takes the secret in the TV's own cookie.
+async function pair(req: Request, data: Record<string, unknown>) {
+  const now = Date.now();
+  if (data.action === 'pairStart') {
+    const address = await hit('pair:start:ip:' + client(req), pairStarts, window);
+    if (!address.allowed) return tooMany(address.retryAfter);
+    await env.DB.prepare('DELETE FROM device_pairings WHERE expires<=?').bind(now).run();
+    const secret = crypto.randomUUID();
+    const expiresAt = now + pairSeconds * 1000;
+    for (let i = 0; i < 5; i++) {
+      const code = pairCode();
+      const added = await env.DB.prepare(
+        'INSERT OR IGNORE INTO device_pairings (code, secret, expires) VALUES (?,?,?)',
+      )
+        .bind(code, await hashToken(secret), expiresAt)
+        .run();
+      if (added.meta.changes)
+        return reply({ code, expiresAt }, 200, { 'Set-Cookie': pairSecretCookie(req, secret, pairSeconds) });
+    }
+    return reply({ error: 'Please try again.' }, 503);
+  }
+  if (data.action === 'pairApprove') {
+    const who = await current(req);
+    if (!who) return reply({ error: 'Sign in first.' }, 401);
+    const tries = await hit('pair:approve:ip:' + client(req), pairApprovals, window);
+    if (!tries.allowed) return tooMany(tries.retryAfter);
+    const code = typeof data.code === 'string' ? data.code.toUpperCase() : '';
+    const approved = await env.DB.prepare(
+      'UPDATE device_pairings SET profile_id=? WHERE code=? AND profile_id IS NULL AND expires>?',
+    )
+      .bind(who.id, code, now)
+      .run();
+    if (!approved.meta.changes)
+      return reply({ error: 'This code is wrong or has expired. Ask the TV for a new one.' }, 404);
+    return reply({ profile: publicProfile(who) });
+  }
+  // pairClaim. Taking the approved code and deleting it is one statement, so a code signs in one TV once.
+  const secret = await hashToken(pairSecret(req));
+  const taken = await env.DB.prepare(
+    'DELETE FROM device_pairings WHERE secret=? AND profile_id IS NOT NULL AND expires>? RETURNING profile_id AS profileId',
+  )
+    .bind(secret, now)
+    .first<{ profileId: string }>();
+  if (taken) {
+    const profile = await env.DB.prepare('SELECT id,name,birthday,avatar FROM profiles WHERE id=?')
+      .bind(taken.profileId)
+      .first<Omit<Row, 'salt' | 'password_hash'>>();
+    if (profile) return startSession(req, profile, tvSessionSeconds);
+  }
+  const waiting = await env.DB.prepare('SELECT 1 FROM device_pairings WHERE secret=? AND expires>?')
+    .bind(secret, now)
+    .first();
+  if (waiting) return reply({ profile: null }, 202);
+  return reply({ error: 'This code has expired. Show a new one.' }, 410, {
+    'Set-Cookie': pairSecretCookie(req, '', 0),
   });
 }
 
@@ -88,13 +175,18 @@ export async function POST(req: Request) {
       .run();
     return reply({ profile: null }, 200, signedOut(req));
   }
+  if (['pairStart', 'pairApprove', 'pairClaim'].includes(String(data.action))) return pair(req, data);
 
   // Actions for someone who is signed in. Changing or deleting also asks for the password again.
   if (['logoutAll', 'changePassword', 'deleteAccount'].includes(String(data.action))) {
     const who = await current(req);
     if (!who) return reply({ error: 'Sign in first.' }, 401);
     if (data.action === 'logoutAll') {
-      await env.DB.prepare('DELETE FROM profile_sessions WHERE profile_id=?').bind(who.id).run();
+      // TVs signed in from a phone included, and any code approved that a TV has not claimed yet.
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM profile_sessions WHERE profile_id=?').bind(who.id),
+        env.DB.prepare('DELETE FROM device_pairings WHERE profile_id=?').bind(who.id),
+      ]);
       return reply({ profile: null }, 200, signedOut(req));
     }
     if (
@@ -109,6 +201,7 @@ export async function POST(req: Request) {
     if (data.action === 'deleteAccount') {
       await env.DB.batch([
         env.DB.prepare('DELETE FROM profile_sessions WHERE profile_id=?').bind(who.id),
+        env.DB.prepare('DELETE FROM device_pairings WHERE profile_id=?').bind(who.id),
         env.DB.prepare('DELETE FROM profiles WHERE id=?').bind(who.id),
       ]);
       return reply({ profile: null }, 200, signedOut(req));

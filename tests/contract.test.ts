@@ -81,6 +81,9 @@ describe('what the screens send is accepted', () => {
     { action: 'logoutAll' },
     { action: 'changePassword', password: 'correct horse', newPassword: 'another one' },
     { action: 'deleteAccount', password: 'correct horse' },
+    { action: 'pairStart' },
+    { action: 'pairApprove', code: 'K7QP2M' },
+    { action: 'pairClaim' },
   ])('profile request %j', (body) => fits(ProfileRequest, body));
 });
 
