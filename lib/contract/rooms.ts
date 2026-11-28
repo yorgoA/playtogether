@@ -73,7 +73,10 @@ const playerCommands = [
     // A secret the phone makes up, sent again when it repeats a join whose reply it never got.
     // It gives back the same seat, so it must be random and never shown to anyone.
     joinId: z.string().min(16).max(64).optional(),
-    name: z.string().min(1).max(40),
+    // A phone signed in to its profile joins with that profile's name and avatar, and may leave `name` out.
+    // `guest` joins with a nickname instead, even while signed in.
+    name: z.string().min(1).max(40).optional(),
+    guest: z.boolean().optional(),
     avatar: z.string().max(40).optional(),
     color: z.string().max(16).optional(),
   }),
@@ -160,6 +163,8 @@ const Player = z
     gained: z.number().optional(),
     ready: z.boolean(),
     connected: z.boolean(),
+    // Whether the seat is a signed-in profile. Which profile stays on the server.
+    signedIn: z.boolean(),
     score: z.number(),
     answered: z.boolean(),
   })

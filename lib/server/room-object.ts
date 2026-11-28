@@ -1,7 +1,17 @@
 import { DurableObject } from 'cloudflare:workers';
 import { LiveHello } from '../contract';
 import { GameError } from './games';
-import { knows, mutate, nextWake, roomTtlMs, snapshot, stillHere, tick, type Room } from './session';
+import {
+  knows,
+  mutate,
+  nextWake,
+  roomTtlMs,
+  snapshot,
+  stillHere,
+  tick,
+  type Joiner,
+  type Room,
+} from './session';
 import type { Question } from './trivia';
 
 // What the room answers the Worker, which sends it on as is. `questions` asks for the quiz's questions first.
@@ -31,7 +41,12 @@ export class RoomObject extends DurableObject {
     return true;
   }
 
-  async run(command: Record<string, unknown>, token: string, questions?: Question[]): Promise<RoomReply> {
+  async run(
+    command: Record<string, unknown>,
+    token: string,
+    questions?: Question[],
+    joiner?: Joiner,
+  ): Promise<RoomReply> {
     const now = Date.now();
     const r = await this.load(now);
     if (!r) return { status: 404, body: { error: 'Room code not found.' } };
@@ -42,7 +57,7 @@ export class RoomObject extends DurableObject {
     this.sweep(now);
     const here = stillHere(r, this.tokens(now), now);
     try {
-      const { dirty, extras } = mutate(r, command, token, now, questions);
+      const { dirty, extras } = mutate(r, command, token, now, questions, joiner);
       if (dirty || here) await this.save(r, now);
       return { status: 200, body: { ...extras, room: snapshot(r, now, extras.playerToken || token) } };
     } catch (e) {

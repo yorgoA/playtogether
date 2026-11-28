@@ -53,6 +53,8 @@ type Player = {
   joinId?: string;
   // A bot is playing this disconnected player's seat until they return.
   standIn?: boolean;
+  // The profile this seat plays as, never sent to any screen. Only that profile can take the seat back.
+  profileId?: string;
   id: string;
   token: string;
   name: string;
@@ -96,6 +98,8 @@ export type Room = {
   pausedAt: number;
 };
 type Command = Record<string, unknown>;
+// The profile a phone is signed in to when it joins, read by the server from its session, never from the command.
+export type Joiner = { id: string; name: string; avatar: string };
 const connected = (p: Player, now: number) => !!p.bot || now - p.lastSeen < 25000;
 const context = (r: Room, now: number): MatchContext => ({
   now,
@@ -337,7 +341,14 @@ function textField(value: unknown, max: number, label: string): string {
   return value.trim();
 }
 // `questions` are what a quiz starting now can ask.
-export function mutate(r: Room, command: Command, token: string, now: number, questions: Question[] = []) {
+export function mutate(
+  r: Room,
+  command: Command,
+  token: string,
+  now: number,
+  questions: Question[] = [],
+  joiner?: Joiner,
+) {
   const { action } = command;
   let dirty = advance(r, now);
   const extras: Record<string, string> = {};
@@ -350,9 +361,19 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
       again.standIn = undefined;
       return { dirty: true, extras: { playerId: again.id, playerToken: again.token } };
     }
-    const wanted = typeof command.name === 'string' ? command.name.trim().toLowerCase() : '';
-    const dropped = r.players.find((p) => p.name.toLowerCase() === wanted && !connected(p, now));
-    if (dropped && r.phase !== 'ended') {
+    const profile = command.guest === true ? undefined : joiner;
+    const wanted = profile
+      ? profile.name.toLowerCase()
+      : typeof command.name === 'string'
+        ? command.name.trim().toLowerCase()
+        : '';
+    // A signed-in seat comes back to its own profile only, so a guest cannot play as someone's profile.
+    const dropped = r.players.find((p) =>
+      profile ? p.profileId === profile.id : !p.profileId && p.name.toLowerCase() === wanted,
+    );
+    if (dropped && profile && connected(dropped, now))
+      throw new GameError('You are already playing in this room on another phone.', 409);
+    if (dropped && !connected(dropped, now) && r.phase !== 'ended') {
       // A fresh token moves the seat to this phone; the old one stops working.
       dropped.token = crypto.randomUUID();
       dropped.joinId = joinId;
@@ -362,10 +383,14 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
     }
     if (r.phase !== 'lobby') throw new GameError('This room is no longer accepting players.', 409);
     if (r.players.length >= games[r.game].maxPlayers) throw new GameError('This room is full.', 409);
-    const name = textField(command.name, 20, 'nickname');
+    const name = profile ? profile.name : textField(command.name, 20, 'nickname');
     if (r.players.some((p) => p.name.toLowerCase() === name.toLowerCase()))
-      throw new GameError('That nickname is already in the room.');
-    const avatar = textField(command.avatar ?? '🎮', 32, 'avatar');
+      throw new GameError(
+        profile
+          ? 'Someone here already goes by your name. Join as a guest with another one.'
+          : 'That nickname is already in the room.',
+      );
+    const avatar = profile ? profile.avatar : textField(command.avatar ?? '🎮', 32, 'avatar');
     const color = command.color ?? '#A783FF';
     if (typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color))
       throw new GameError('Choose a player color.');
@@ -375,6 +400,7 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
       id,
       token: playerToken,
       joinId,
+      profileId: profile?.id,
       name,
       avatar,
       color,
@@ -609,6 +635,7 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
       gained: p.gained,
       ready: p.ready,
       connected: connected(p, now),
+      signedIn: !!p.profileId,
       score: p.score,
       answered: p.answered,
     })),
