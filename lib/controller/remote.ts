@@ -60,3 +60,23 @@ export function useRemote(back:()=>void){
   document.addEventListener('keydown',key);return ()=>document.removeEventListener('keydown',key);
  },[]);
 }
+// OK on the remote is Enter. A short press calls `press`; holding it calls `hold` once, so a card can open on a
+// press and be saved to favourites on a hold. Remotes that send no key repeats are timed on release.
+const holdMs=600;
+let okDown={at:0,done:false};
+export function okKeys(press:()=>void,hold:()=>void){
+ return {
+  onKeyDown(e:React.KeyboardEvent){
+   if(e.key!=='Enter')return;
+   e.preventDefault();
+   if(!e.repeat){okDown={at:performance.now(),done:false};return}
+   if(!okDown.done&&okDown.at&&performance.now()-okDown.at>=holdMs){okDown.done=true;hold()}
+  },
+  onKeyUp(e:React.KeyboardEvent){
+   if(e.key!=='Enter'||!okDown.at)return;
+   e.preventDefault();
+   const {at,done}=okDown;okDown={at:0,done:false};
+   if(!done)(performance.now()-at>=holdMs?hold:press)();
+  },
+ };
+}
