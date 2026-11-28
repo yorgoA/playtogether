@@ -33,6 +33,19 @@ export const profileSessions = sqliteTable(
   (t) => [index('profile_sessions_expires_idx').on(t.expires)],
 );
 
+// A TV waiting to be signed in from a phone. Its secret stays in the TV's cookie; only a hash is stored.
+// `profileId` is set once a signed-in phone approves the code.
+export const devicePairings = sqliteTable(
+  'device_pairings',
+  {
+    code: text('code').primaryKey(),
+    secret: text('secret').notNull().unique(),
+    profileId: text('profile_id'),
+    expires: integer('expires').notNull(),
+  },
+  (t) => [index('device_pairings_expires_idx').on(t.expires)],
+);
+
 // Counts attempts per key (a name or an address) until `resetAt`, to slow down guessing.
 export const rateLimits = sqliteTable(
   'rate_limits',

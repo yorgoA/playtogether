@@ -29,6 +29,13 @@
       "when": 1795533814465,
       "tag": "0003_security",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1795876821210,
+      "tag": "0004_exotic_jackpot",
+      "breakpoints": true
     }
   ]
 }

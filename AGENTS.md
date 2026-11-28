@@ -46,5 +46,5 @@ Tables are defined in `db/schema.ts`. Change that file and run `npm run db:gener
 
 - Decide game results, hidden hands, quiz answers and permissions on the server. Never trust the client for them.
 - Never return tokens, password hashes or another player's hand.
-- Profile sessions are stored as SHA-256 hashes, wrong passwords and sign-ups are rate limited (`lib/server/profiles.ts`), and `POST /api/profile` also supports `logoutAll`, `changePassword` and `deleteAccount`. Keep these behaviours when changing it; `tests/security.test.ts` covers them.
+- Profile sessions are stored as SHA-256 hashes, wrong passwords and sign-ups are rate limited (`lib/server/profiles.ts`), and `POST /api/profile` also supports `logoutAll`, `changePassword` and `deleteAccount`, and signing a TV in from a phone (`pairStart`, `pairApprove`, `pairClaim`). Keep these behaviours when changing it; `tests/security.test.ts` and `tests/pairing.test.ts` cover them.
 - Never commit secrets. Use `.dev.vars`, which Git ignores.
