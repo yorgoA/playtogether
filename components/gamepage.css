@@ -1,0 +1,60 @@
+.gamePage{padding-bottom:56px}
+.gameHero{position:relative;isolation:isolate;min-height:min(72vh,760px);background-color:#1a1029;background-size:cover;background-position:center right;display:flex;align-items:flex-end}
+.gameHeroShade{position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,#101116 0%,#101116e6 28%,#1011168c 52%,#10111600 75%),linear-gradient(0deg,#101116 0%,#10111600 40%)}
+.gameBack{position:absolute;top:28px;left:clamp(20px,3.5vw,72px);display:inline-flex;align-items:center;gap:6px;padding:10px 16px 10px 10px;border-radius:9px;background:#14151bcc;border:1px solid #3c3d47;font-size:14px;font-weight:700}
+.gameBack svg{width:18px;height:18px}
+.gameBack:hover{background:#30313c}
+.gameHeroContent{width:min(100% - clamp(40px,7vw,144px),1720px);margin:0 auto;padding:120px 0 48px}
+.gameHeroContent>*{max-width:640px}
+.gameHero h1{margin:14px 0 10px;text-transform:uppercase;font-size:clamp(56px,6.4vw,128px);letter-spacing:-.065em;line-height:.98;font-weight:1000;font-family:'Arial Black',Arial,sans-serif;transform:skew(-7deg);transform-origin:left}
+.gameHero h1 em{color:var(--lime);font-style:normal}
+.gameHero p{color:#e4dced;line-height:1.55;font-size:clamp(16px,1.1vw,21px);margin:13px 0 0}
+.gameHero .actions{flex-wrap:wrap}
+.gamePage .favoriteBtn{margin:0}
+.gamePage .favoriteBtn svg{width:17px;height:17px}
+.gameBody{width:min(100% - clamp(40px,7vw,144px),1720px);margin:8px auto 0;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:clamp(20px,2.4vw,48px);align-items:start}
+.gameBody section{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:clamp(20px,1.8vw,32px)}
+.gameBody h2{margin:0;font-size:clamp(22px,1.6vw,30px);letter-spacing:-.04em;display:flex;align-items:center;gap:10px}
+.gameBody h2 svg{width:.9em;height:.9em;color:var(--lime)}
+.gameInfo dl{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:20px 0 26px}
+.gameInfo dl div{background:#22232c;border-radius:10px;padding:12px 14px}
+.gameInfo dt{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}
+.gameInfo dt svg{width:15px;height:15px}
+.gameInfo dd{margin:6px 0 0;font-weight:750;font-size:17px}
+.gameInfo h3{margin:0 0 10px;font-size:17px}
+.gameInfo ol{margin:0;padding-left:22px;color:#d6d5df;line-height:1.55}
+.gameInfo li+li{margin-top:8px}
+.achTop{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.achCount{font:700 15px 'Courier New',monospace;letter-spacing:1px;color:var(--muted);white-space:nowrap}
+.achCount b{color:var(--lime);font-size:1.4em}
+.achBar{height:6px;border-radius:6px;background:#2c2d37;margin:16px 0 6px;overflow:hidden}
+.achBar i{display:block;height:100%;background:var(--lime);border-radius:inherit}
+.achGuest{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:16px 0 4px;padding:14px 16px;border-radius:12px;background:#292232;border:1px solid #534457}
+.achGuest p{margin:0;color:#e4dced}
+.gameAchievements ul{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:8px}
+.gameAchievements li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:14px;padding:12px 14px;border-radius:12px;background:#22232c;border:1px solid transparent}
+.gameAchievements li:focus-visible{outline:3px solid var(--lime);outline-offset:2px}
+.gameAchievements li h3{margin:0;font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gameAchievements li p{margin:3px 0 0;color:#b9b8c6;font-size:14px;line-height:1.4}
+.achIcon{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;background:#2c2d37;color:#8c8b99}
+.achIcon svg{width:19px;height:19px}
+.gameAchievements .earned{border-color:#4d5f34;background:#232a1d}
+.gameAchievements .earned .achIcon{background:var(--lime);color:#1c2411}
+.gameAchievements .locked h3,.gameAchievements .locked p{color:#8c8b99}
+.achWhen{font-size:13px;color:var(--muted);white-space:nowrap}
+.earned .achWhen{color:var(--lime)}
+.achTag{font:700 10px 'Courier New',monospace;letter-spacing:1px;text-transform:uppercase;color:#f3c4ff;background:#3a2442;border-radius:5px;padding:3px 6px}
+@media (max-width:900px){
+ .gameBody{grid-template-columns:1fr}
+ .gameHero{min-height:62vh}
+ .gameInfo dl{grid-template-columns:1fr 1fr 1fr}
+}
+@media (max-width:560px){
+ .gameAchievements li{grid-template-columns:auto minmax(0,1fr)}
+ .achWhen{grid-column:2}
+}
+/* TV: the page sits inside .hub, so it shares the hub's --tv size. */
+@media (min-width:1600px){
+ .gamePage :is(.gameHero p,.gameInfo ol,.gameInfo dd,.gameAchievements li h3){font-size:calc(var(--tv)*1.1)}
+ .gamePage :is(.gameBack,.kicker,.primary,.secondary,.gameInfo dt,.gameAchievements li p,.achWhen,.achGuest p,.gameInfo h3){font-size:var(--tv)}
+}

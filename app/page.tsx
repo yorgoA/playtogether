@@ -5,6 +5,7 @@ import {games,type Game} from '../lib/catalog';
 import GameSession from '../components/GameSession';
 import HubProfile, {type Viewer} from '../components/HubProfile';
 import AfterHours from '../components/AfterHours';
+import GamePage from '../components/GamePage';
 import {okKeys,useRemote} from '../lib/controller/remote';
 const categories = [
   { id: 'party', title: 'Party', art: 'party' },
@@ -15,26 +16,29 @@ const night='After hours';
 function Meta({g}:{g:Game}){return <div className="meta"><span><Users/>{g.players} players</span><i/><span><Timer/>{g.duration}</span></div>}
 function Cover({g}:{g:Game}){let words=g.name.split(' ');return <div className={'cover '+g.art} style={{backgroundImage:'url(/art/'+g.art+(g.group===night||g.art==='storm'?'.svg)':'.webp)')}}><span className="coverLogo">{words[0]}<br/>{words[1]}</span></div>}
 export default function Home(){
- const [view,setView]=useState('Home'),[index,setIndex]=useState(0),[detail,setDetail]=useState<Game|null>(null),[help,setHelp]=useState(false),[playing,setPlaying]=useState(''),[recent,setRecent]=useState<string[]>([]),[resume,setResume]=useState('');const modal=useRef<HTMLDialogElement>(null);
+ const [view,setView]=useState('Home'),[index,setIndex]=useState(0),[detail,setDetail]=useState<Game|null>(null),[help,setHelp]=useState(false),[playing,setPlaying]=useState(''),[recent,setRecent]=useState<string[]>([]),[resume,setResume]=useState('');const modal=useRef<HTMLDialogElement>(null),opener=useRef<{el:Element|null;y:number}|null>(null);
  const [profileOpen,setProfileOpen]=useState(false),[viewer,setViewer]=useState<Viewer|null>(null),[favorites,setFavorites]=useState<string[]>([]),[query,setQuery]=useState(''),[paused,setPaused]=useState(false),[heroFocus,setHeroFocus]=useState(false);
  const prefix=viewer?'pt-'+viewer.id:'pt';
  useEffect(()=>{fetch('/api/profile').then(r=>r.json() as Promise<{profile:Viewer|null}>).then(v=>setViewer(v.profile)).catch(()=>{});setPaused(window.matchMedia('(prefers-reduced-motion: reduce)').matches)},[]);
  useEffect(()=>{try{setRecent(JSON.parse(localStorage.getItem(prefix+'-recent')||'[]'));setFavorites(JSON.parse(localStorage.getItem(prefix+'-favorites')||'[]'));setResume(JSON.parse(localStorage.getItem('playtogether.host')||'{}').game||'')}catch{}},[playing,prefix]);
- useEffect(()=>{if(detail||help||profileOpen)modal.current?.showModal();else modal.current?.close()},[detail,help,profileOpen]);
+ useEffect(()=>{if(help||profileOpen)modal.current?.showModal();else modal.current?.close()},[help,profileOpen]);
+ // Back from a game page lands on the card it was opened from, where the hub was scrolled to.
+ useEffect(()=>{if(detail||!opener.current)return;const {el,y}=opener.current;opener.current=null;window.scrollTo(0,y);if(el instanceof HTMLElement&&el.isConnected)el.focus({preventScroll:true})},[detail]);
  useEffect(()=>{if(paused||heroFocus||detail||help||profileOpen||playing||view!=='Home')return;const timer=setInterval(()=>{if(!document.hidden)setIndex(i=>(i+1)%3)},5000);return ()=>clearInterval(timer)},[paused,heroFocus,detail,help,profileOpen,playing,view,index]);
  function favorite(g:Game){const next=favorites.includes(g.id)?favorites.filter(id=>id!==g.id):[...favorites,g.id];setFavorites(next);localStorage.setItem(prefix+'-favorites',JSON.stringify(next))}
- function close(){setDetail(null);setHelp(false);setProfileOpen(false)}
- // Back on the remote closes a dialog, leaves a game, or returns to Home.
- useRemote(()=>{if(detail||help||profileOpen)close();else if(playing)setPlaying('');else if(view!=='Home')nav('Home')});
- function play(g:Game){setDetail(null);const arr=[g.id,...recent.filter(k=>k!==g.id)].slice(0,8);setRecent(arr);localStorage.setItem(prefix+'-recent',JSON.stringify(arr));setPlaying(g.id)}
+ function close(){setHelp(false);setProfileOpen(false)}
+ function open(g:Game){opener.current={el:document.activeElement,y:window.scrollY};setDetail(g)}
+ // Back on the remote closes a dialog, leaves a game page or a game, or returns to Home.
+ useRemote(()=>{if(help||profileOpen)close();else if(detail)setDetail(null);else if(playing)setPlaying('');else if(view!=='Home')nav('Home')});
+ function play(g:Game){opener.current=null;setDetail(null);const arr=[g.id,...recent.filter(k=>k!==g.id)].slice(0,8);setRecent(arr);localStorage.setItem(prefix+'-recent',JSON.stringify(arr));setPlaying(g.id)}
  function nav(v:string){setView(v);setQuery('');window.scrollTo(0,0)}
  if(playing)return <GameSession game={playing} onExit={()=>setPlaying('')}/>;
  // Drinking games show up only for adult profiles.
  const library=viewer?.adult?games:games.filter(g=>g.group!==night);
  const features=['settlers','quiz','reaction'].map(id=>games.find(game=>game.id===id)!),feat=features[index];
  const sections=view==='Home'?categories.map(({id,title})=>({id,title,items:games.filter(g=>g.group===title)})):[{id:undefined,title:view,items:view==='Search'?library.filter(g=>(g.name+' '+g.group).toLowerCase().includes(query.trim().toLowerCase())):(view==='Favorites'?favorites:recent).flatMap(id=>library.filter(g=>g.id===id))}];
- const tile=(g:Game)=><article key={g.id} className="shelfItem"><button className="card" onClick={()=>setDetail(g)} {...okKeys(()=>setDetail(g),()=>favorite(g))}><Cover g={g}/><div className="cardBody"><div className="cardLabels"><span>{g.genre}</span><span className={g.live?'live':'soon'}>{g.live?'Playable':'Coming soon'}</span></div><h3>{g.name}</h3><Meta g={g}/></div></button><button className="heartBtn" aria-pressed={favorites.includes(g.id)} aria-label={'Favorite '+g.name} onClick={()=>favorite(g)}><Heart fill={favorites.includes(g.id)?'currentColor':'none'}/></button></article>;
- return <div className="hub"><header className="top"><div className="topInner"><button className="brand" onClick={()=>nav('Home')} aria-label="PlayTogether home"><img src="/favicon.svg" alt=""/><span>Play<span>Together</span></span></button><nav>{[['Search',Search],['Home',House],['Recents',History],['Favorites',Heart]].map(([label,I])=>{const Icon=I as typeof House;return <button key={String(label)} className={view===label?'selected':''} onClick={()=>nav(String(label))}><Icon/>{String(label)}</button>})}</nav><button className="join" aria-label="Open profile" onClick={()=>setProfileOpen(true)}>{viewer?<>{viewer.avatar} {viewer.name}</>:<UserCircle/>}</button></div></header>
+ const tile=(g:Game)=><article key={g.id} className="shelfItem"><button className="card" onClick={()=>open(g)} {...okKeys(()=>open(g),()=>favorite(g))}><Cover g={g}/><div className="cardBody"><div className="cardLabels"><span>{g.genre}</span><span className={g.live?'live':'soon'}>{g.live?'Playable':'Coming soon'}</span></div><h3>{g.name}</h3><Meta g={g}/></div></button><button className="heartBtn" aria-pressed={favorites.includes(g.id)} aria-label={'Favorite '+g.name} onClick={()=>favorite(g)}><Heart fill={favorites.includes(g.id)?'currentColor':'none'}/></button></article>;
+ return <div className="hub">{detail&&<GamePage game={detail} viewer={viewer} favourite={favorites.includes(detail.id)} onFavourite={()=>favorite(detail)} onPlay={()=>play(detail)} onBack={()=>setDetail(null)} onSignIn={()=>setProfileOpen(true)}/>}<div hidden={!!detail}><header className="top"><div className="topInner"><button className="brand" onClick={()=>nav('Home')} aria-label="PlayTogether home"><img src="/favicon.svg" alt=""/><span>Play<span>Together</span></span></button><nav>{[['Search',Search],['Home',House],['Recents',History],['Favorites',Heart]].map(([label,I])=>{const Icon=I as typeof House;return <button key={String(label)} className={view===label?'selected':''} onClick={()=>nav(String(label))}><Icon/>{String(label)}</button>})}</nav><button className="join" aria-label="Open profile" onClick={()=>setProfileOpen(true)}>{viewer?<>{viewer.avatar} {viewer.name}</>:<UserCircle/>}</button></div></header>
  <main className="main">{view==='Home'&&<><div className="homeTools"><button className="how" onClick={()=>setHelp(true)}><HelpCircle/>How to play</button></div>
  <section onFocusCapture={()=>setHeroFocus(true)} onBlurCapture={e=>setHeroFocus(e.currentTarget.contains(e.relatedTarget))} className={'hero hero-'+feat.art} style={{backgroundImage:'url(/art/'+feat.art+'.webp)'}}><div className="heroShade"/>
    {features.map((game, slide)=><div key={game.id} className="heroContent" hidden={slide!==index}>
@@ -44,7 +48,7 @@ export default function Home(){
      <Meta g={game}/>
      <div className="actions">
        {game.live&&<button className="primary" data-remote-start onClick={()=>play(game)}><Play fill="currentColor"/>Play now</button>}
-       <button className="secondary" onClick={()=>setDetail(game)}><Info/>Game details</button>
+       <button className="secondary" onClick={()=>open(game)}><Info/>Game details</button>
      </div>
    </div>)}
    <div className="heroPager"><button aria-label={paused?"Resume carousel":"Pause carousel"} onClick={()=>setPaused(!paused)}>{paused?<Play/>:<Pause/>}</button><button aria-label="Previous featured game" onClick={()=>setIndex((index+2)%3)}><ChevronLeft/></button><span>0{index+1} <b>/ 03</b></span><button aria-label="Next featured game" onClick={()=>setIndex((index+1)%3)}><ChevronRight/></button></div></section>
@@ -58,6 +62,6 @@ export default function Home(){
  {resume&&library.some(g=>g.id===resume)&&<button className="resume" onClick={()=>setPlaying(resume)}><Gamepad2/>Continue playing · {games.find(g=>g.id===resume)?.name}</button>}</>}
  {view==='Search'&&<input autoFocus type="search" className="hubSearch" aria-label="Search games" placeholder="Search games or categories" value={query} onChange={e=>setQuery(e.target.value)}/>}
  {sections.map(({id,title,items})=><section className="catalog" key={title}><h2 id={id} tabIndex={id ? -1 : undefined}>{title==='Search'?'Search results':title}</h2><div className="shelf">{items.map(tile)}</div>{!items.length&&<p>{view==='Favorites'?'Select the heart on a game to save it here.':view==='Recents'?'Games you launch will appear here.':'No games match your search.'}</p>}</section>)}
- {view==='Home'&&<AfterHours key={prefix} viewer={viewer} login={()=>setProfileOpen(true)}><div className="shelf">{games.filter(g=>g.group===night).map(tile)}</div></AfterHours>}</main>
- <dialog ref={modal} onCancel={close} onClick={e=>{if(e.target===modal.current)close()}}><div className="dialogInner"><button className="close" aria-label="Close" onClick={close}><X/></button>{profileOpen?<HubProfile viewer={viewer} change={v=>{setViewer(v);close();nav('Home')}}/>:detail?<><Cover g={detail}/><div className="dialogContent"><div className="smallLabel">{detail.genre} · {detail.level}</div><h2>{detail.name}</h2><Meta g={detail}/><p>{detail.description}</p><h3>How to play</h3><ol>{detail.rules.map(r=><li key={r}>{r}</li>)}</ol>{detail.live?<button className="primary" onClick={()=>play(detail)}><Play/>Start game</button>:<strong className="coming">Coming soon</strong>}<button className="secondary favoriteBtn" aria-pressed={favorites.includes(detail.id)} onClick={()=>favorite(detail)}><Heart fill={favorites.includes(detail.id)?'currentColor':'none'}/>{favorites.includes(detail.id)?'In your favourites':'Add to favourites'}</button></div></>:<div className="dialogContent guide"><Smartphone/><h2>How to play</h2><ol><li>Open PlayTogether on your TV or a laptop connected to it.</li><li>Pick a playable game to create your room.</li><li>Scan the QR code with each phone, choose a nickname, and tap Ready.</li><li>Start the match on the big screen. Your phone is your controller.</li></ol><button className="primary" onClick={()=>setHelp(false)}><Check/>Got it</button></div>}</div></dialog></div>
+ {view==='Home'&&<AfterHours key={prefix} viewer={viewer} login={()=>setProfileOpen(true)}><div className="shelf">{games.filter(g=>g.group===night).map(tile)}</div></AfterHours>}</main></div>
+ <dialog ref={modal} onCancel={close} onClick={e=>{if(e.target===modal.current)close()}}><div className="dialogInner"><button className="close" aria-label="Close" onClick={close}><X/></button>{profileOpen?<HubProfile viewer={viewer} change={v=>{setViewer(v);close();nav('Home')}}/>:<div className="dialogContent guide"><Smartphone/><h2>How to play</h2><ol><li>Open PlayTogether on your TV or a laptop connected to it.</li><li>Pick a playable game to create your room.</li><li>Scan the QR code with each phone, choose a nickname, and tap Ready.</li><li>Start the match on the big screen. Your phone is your controller.</li></ol><button className="primary" onClick={()=>setHelp(false)}><Check/>Got it</button></div>}</div></dialog></div>
 }
