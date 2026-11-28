@@ -5,7 +5,7 @@ import { GameError } from './games';
 import { current, publicProfile } from './profiles';
 import type { RoomObject } from './room-object';
 import { findQuestions, type Question } from './trivia';
-import { mutate, newRoom, roomTtlMs as ttl, snapshot, type Room } from './session';
+import { mutate, newRoom, roomTtlMs as ttl, snapshot, type Joiner, type Room } from './session';
 
 function db() {
   if (!env.DB) throw new GameError('Room storage is unavailable.', 503);
@@ -90,11 +90,16 @@ export async function handle(req: Request, rawCode: string) {
     const checked = RoomCommand.safeParse(command);
     if (!checked.success) invalid(checked.error);
     if (command.action === 'configure') await checkAge(req, command.game);
+    // Read from the phone's own session, so a phone can only join as the profile it is signed in to.
+    const signedIn = command.action === 'join' && command.guest !== true ? await current(req) : null;
+    const joiner: Joiner | undefined = signedIn
+      ? { id: signedIn.id, name: signedIn.name, avatar: signedIn.avatar }
+      : undefined;
     if (durable()) {
       // The room asks for quiz questions before starting one; they are fetched here, outside the room.
       let questions: Question[] | undefined;
       for (;;) {
-        const answer = await roomAt(code).run(command, token, questions);
+        const answer = await roomAt(code).run(command, token, questions, joiner);
         if (!answer.questions || questions) return reply(answer.body, answer.status);
         questions = await findQuestions(Date.now());
       }
@@ -122,7 +127,7 @@ export async function handle(req: Request, rawCode: string) {
         // Fetching takes a moment, so look at the room again.
         continue;
       }
-      const { dirty, extras } = mutate(r, command, token, now, questions);
+      const { dirty, extras } = mutate(r, command, token, now, questions, joiner);
       if (dirty) {
         const result = await store
           .prepare('UPDATE rooms SET state=?, version=version+1, expires=? WHERE code=? AND version=?')
