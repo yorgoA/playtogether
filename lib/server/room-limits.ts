@@ -6,6 +6,8 @@ import { client, exhausted, hit, minute } from './profiles';
 const roomsPerHour = 30;
 const joinsPerWindow = 60;
 const unknownCodesPerWindow = 60;
+// Sockets opened, reconnections after a drop included.
+const socketsPerWindow = 120;
 const window = 10 * minute;
 
 // On this machine there is no Cloudflare address, so local play and `npm run test:live` are never limited.
@@ -60,4 +62,17 @@ export async function limitRoom(req: Request, handle: () => Promise<Response>) {
   }
   if (res.status === 404) await hit(misses, unknownCodesPerWindow, window);
   return res;
+}
+
+// GET /api/rooms/:code/live, the room's WebSocket. The token only comes in the first message, so an address
+// that guessed codes gets no socket at all, and each address may open a few a minute: every attempt wakes a
+// Durable Object, even for a code with no room. A screen without its socket goes back to polling.
+export async function limitLive(req: Request, open: () => Promise<Response>) {
+  const address = client(req);
+  if (local(address)) return open();
+  const wait = await exhausted('rooms:unknown:' + address, unknownCodesPerWindow);
+  if (wait) return tooMany('wrong room codes', wait);
+  const { allowed, retryAfter } = await hit('rooms:live:' + address, socketsPerWindow, window);
+  if (!allowed) return tooMany('room connections', retryAfter);
+  return open();
 }

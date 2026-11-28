@@ -1,6 +1,9 @@
 declare namespace Cloudflare {
   interface Env {
     DB: D1Database;
+    ROOMS: DurableObjectNamespace<import('./lib/server/room-object').RoomObject>;
+    // `durable` keeps new rooms in Durable Objects instead of D1. Set it in `.dev.vars` to try it locally.
+    ROOM_HOST?: string;
     BUCKET?: R2Bucket;
     // A secret set on the staging Worker only. See lib/server/staging-gate.ts.
     STAGING_PASSWORD?: string;

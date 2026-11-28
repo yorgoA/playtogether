@@ -3,13 +3,20 @@ import { adultGames, CreateRoomRequest, gameIds, RoomCommand } from '../contract
 import { readText } from './body';
 import { GameError } from './games';
 import { current, publicProfile } from './profiles';
+import type { RoomObject } from './room-object';
 import { findQuestions, type Question } from './trivia';
-import { mutate, newRoom, snapshot, type Room } from './session';
+import { mutate, newRoom, roomTtlMs as ttl, snapshot, type Room } from './session';
 
-const ttl = 24 * 60 * 60 * 1000;
 function db() {
   if (!env.DB) throw new GameError('Room storage is unavailable.', 503);
   return env.DB;
+}
+// While `ROOM_HOST` is `durable`, rooms live in Durable Objects, one per code, and D1 is not used for them.
+const durable = () => env.ROOM_HOST === 'durable';
+function roomAt(code: string) {
+  if (!env.ROOMS) throw new GameError('Room storage is unavailable.', 503);
+  // RPC typing cannot follow the rooms' loose JSON shapes, so the two calls are typed from the class.
+  return env.ROOMS.get(env.ROOMS.idFromName(code)) as unknown as Pick<RoomObject, 'create' | 'run'>;
 }
 async function body(req: Request): Promise<Record<string, unknown>> {
   if (!req.headers.get('content-type')?.includes('application/json')) throw new GameError('Send JSON.', 415);
@@ -48,6 +55,15 @@ export async function create(req: Request) {
     const checked = CreateRoomRequest.safeParse(command);
     if (!checked.success) invalid(checked.error);
     await checkAge(req, command.game);
+    if (durable()) {
+      for (let i = 0; i < 8; i++) {
+        const code = makeCode(),
+          r: Room = { ...newRoom(code, command), live: true };
+        if (await roomAt(code).create(r))
+          return reply({ code, hostToken: r.hostToken, room: snapshot(r, Date.now()) }, 201);
+      }
+      throw new GameError('Please try creating the room again.', 503);
+    }
     const store = db(),
       now = Date.now();
     await store.prepare('DELETE FROM rooms WHERE expires < ?').bind(now).run();
@@ -69,12 +85,21 @@ export async function handle(req: Request, rawCode: string) {
   try {
     const code = rawCode.toUpperCase();
     if (!/^[A-Z2-9]{4}$/.test(code)) throw new GameError('Room code not found.', 404);
-    const store = db(),
-      token = (req.headers.get('Authorization') || '').replace(/^Bearer /i, '');
+    const token = (req.headers.get('Authorization') || '').replace(/^Bearer /i, '');
     const command = req.method === 'GET' ? { action: 'view' } : await body(req);
     const checked = RoomCommand.safeParse(command);
     if (!checked.success) invalid(checked.error);
     if (command.action === 'configure') await checkAge(req, command.game);
+    if (durable()) {
+      // The room asks for quiz questions before starting one; they are fetched here, outside the room.
+      let questions: Question[] | undefined;
+      for (;;) {
+        const answer = await roomAt(code).run(command, token, questions);
+        if (!answer.questions || questions) return reply(answer.body, answer.status);
+        questions = await findQuestions(Date.now());
+      }
+    }
+    const store = db();
     let questions: Question[] | undefined;
     for (let i = 0; i < 12; i++) {
       const now = Date.now();

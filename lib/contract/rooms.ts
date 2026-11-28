@@ -133,6 +133,14 @@ const View = nothing('view');
 export const RoomCommand = z.discriminatedUnion('action', [...playerCommands, ...hostCommands, View]);
 export type RoomCommand = z.infer<typeof RoomCommand>;
 
+// ---- Live rooms: GET /api/rooms/:code/live opens a WebSocket ------------------------------------------
+
+// The first message a screen sends on it, within 5 s: its player or host token, kept out of the URL.
+// After that, the screen sends the text `ping` every 10 s and gets `pong` back. A socket that sends no hello is
+// closed with code 4001, one silent for 25 s with 4008 (the player then shows as gone), and every socket with
+// 4004 once the room has ended. A screen that loses its socket opens a new one.
+export const LiveHello = z.object({ token: z.string().max(60) }).strict();
+
 // ---- Responses -----------------------------------------------------------------------------------------
 
 export const ErrorResponse = z.object({ error: z.string() }).strict();
@@ -321,6 +329,8 @@ export const RoomSnapshot = z
     code: z.string().length(4),
     game: Game,
     phase: Phase,
+    // True when the room pushes its state over a WebSocket at /api/rooms/:code/live (see `LiveHello`).
+    live: z.boolean(),
     // The rounds chosen in the lobby, plus any tie-break rounds played since.
     rounds: z.number(),
     round: z.number(),
@@ -341,6 +351,8 @@ contenders: z.array(z.string()),
   })
   .strict();
 export type RoomSnapshot = z.infer<typeof RoomSnapshot>;
+// What a live room pushes: the same view a GET returns, each time the room changes, or why it closes.
+export const LiveMessage = z.union([z.object({ room: RoomSnapshot }).strict(), ErrorResponse]);
 
 // 201 for POST /api/rooms. `hostToken` goes only to the host screen that created the room.
 export const CreateRoomResponse = z

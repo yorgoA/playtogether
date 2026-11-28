@@ -76,6 +76,17 @@ export function playMatch<S, V>(
   settle(m, r, state, ctx.now, true);
 }
 
+// When the engine next acts with no request: a bot's move, or the end of the turn. 0 when nothing is due.
+export function matchWakes<S, V>(m: GameModule<S, V>, r: MatchRoom, ctx: MatchContext): number[] {
+  const state = matchOf(m, r);
+  if (!state || r.phase !== 'playing') return [];
+  const turn = m.turn?.(state);
+  return [
+    turn && ctx.bots[turn] && m.bot ? r.started + botDelayMs : 0,
+    m.turnMs && m.timeout ? r.deadline : 0,
+  ];
+}
+
 // Plays one move for a bot whose turn it is, or for whoever ran out of time. Returns whether the match changed.
 export function tickMatch<S, V>(m: GameModule<S, V>, r: MatchRoom, ctx: MatchContext) {
   const state = matchOf(m, r);

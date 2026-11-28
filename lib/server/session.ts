@@ -3,6 +3,7 @@ import {
   bangWhenAllShot,
   duelBots,
   duelView,
+  duelWakes,
   leaveDuel,
   rearm,
   startDuel,
@@ -17,6 +18,7 @@ import {
   hurryQuiz,
   quizBots,
   quizView,
+  quizWakes,
   startQuiz,
   type Quiz,
 } from './quiz';
@@ -40,6 +42,7 @@ import {
   clearMatch,
   endMatch,
   leaveMatch,
+  matchWakes,
   playMatch,
   startMatch,
   tickMatch,
@@ -87,6 +90,8 @@ export type Room = {
   cheers?: { n: number; from: string; emoji: string; at: number }[];
   // Quiz questions this room has had, so a rematch brings new ones.
   asked?: string[];
+  // Kept by a Durable Object, which pushes every change over a WebSocket.
+  live?: boolean;
   botAt?: number;
   island?: Island;
   pyramid?: Pyramid;
@@ -167,6 +172,46 @@ function advanceBots(r: Room, now: number) {
     }
   }
   return false;
+}
+// How long a room lives after its last change.
+export const roomTtlMs = 24 * 60 * 60 * 1000;
+// Whether a token opens this room: the host's, or a player's.
+export const knows = (r: Room, token: string) =>
+  !!token && (token === r.hostToken || r.players.some((p) => p.token === token));
+// Marks the players behind these tokens as still here, like a request from their phone would. Returns whether
+// that changed anything worth saving: a phone's own requests refresh it at most every 6.5 s too.
+export function stillHere(r: Room, tokens: string[], now: number) {
+  let changed = false;
+  for (const p of r.players)
+    if (tokens.includes(p.token) && now - p.lastSeen >= 6500) {
+      p.lastSeen = now;
+      changed = true;
+    }
+  return changed;
+}
+// Moves the room on to `now` with no player acting: deadlines, bots and races. Returns whether it changed.
+export function tick(r: Room, now: number) {
+  const moved = advance(r, now);
+  return advanceBots(r, now) || moved;
+}
+// The next moment `tick` would change the room by itself, or null when only a player can move it on.
+export function nextWake(r: Room, now: number): number | null {
+  if (r.phase !== 'playing') return null;
+  const engine = activeModule(r);
+  const board = r.island;
+  const islandBots = board && r.players.some((p) => (p.bot || p.standIn) && botMove(board, p.id));
+  const times = engine
+    ? matchWakes(engine, r, context(r, now))
+    : [
+        r.quiz || r.duel ? r.deadline : 0,
+        ...(r.quiz ? quizWakes(r) : []),
+        ...(r.duel ? duelWakes(r) : []),
+        islandBots ? (r.botAt ?? 0) : 0,
+        r.kings?.raceUntil ?? 0,
+      ];
+  // Anything already due was handled by the tick that came before.
+  const due = times.filter((t) => t > now);
+  return due.length ? Math.min(...due) : null;
 }
 function drink(r: Room, poured: ReturnType<typeof kingsMove>) {
   for (const p of r.players) if (poured?.drinkers.includes(p.id)) p.score -= poured.amount;
@@ -606,6 +651,7 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
     code: r.code,
     game: r.game,
     phase: r.phase,
+    live: !!r.live,
     rounds: totalRounds(r),
     round: r.round,
     // Only tie-breaks take a match past the rounds chosen in the lobby, where the round is 0.
