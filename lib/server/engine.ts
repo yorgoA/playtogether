@@ -18,14 +18,18 @@ export const botDelayMs = 1500;
 // leaving, the end and the final scores. A game only knows its own rules and what each screen may see.
 export type GameModule<S, V> = {
   game: Game;
-  // The command phones send to play, such as { action: 'storm', … }.
-  action: string;
+  // The commands phones send to play, such as { action: 'storm', … }. `move` gets the command whole.
+  action: string | readonly string[];
   // The room field that stores the match and the snapshot field that shows it.
   key: string;
   // How long a turn lasts before the engine calls `timeout`. Games without a turn clock leave it out.
   turnMs?: number;
+  // Copies `score` to the players after every move, for games whose screens show it during the match.
+  liveScores?: boolean;
   start(players: string[], ctx: MatchContext): S;
   move(state: S, playerId: string, command: Command, ctx: MatchContext): void;
+  // A command only the host screen may send, such as turning the next card.
+  host?: { action: string; move(state: S, command: Command, ctx: MatchContext): void };
   // Plays for the player who ran out of time.
   timeout?(state: S, ctx: MatchContext): void;
   // Whose turn it is, for games played in turns.
@@ -52,6 +56,8 @@ export type MatchRoom = {
 
 const slot = (r: MatchRoom) => r as unknown as Record<string, unknown>;
 export const matchOf = <S, V>(m: GameModule<S, V>, r: MatchRoom) => slot(r)[m.key] as S | undefined;
+export const playsWith = <S, V>(m: GameModule<S, V>, action: unknown) =>
+  [m.action].flat().includes(action as string);
 
 export function startMatch<S, V>(m: GameModule<S, V>, r: MatchRoom, ctx: MatchContext) {
   slot(r)[m.key] = m.start(
@@ -70,10 +76,21 @@ export function playMatch<S, V>(
   command: Command,
   ctx: MatchContext,
 ) {
-  const state = matchOf(m, r);
-  if (!state || r.phase !== 'playing') throw new GameError(games[m.game].name + ' is not active.', 409);
+  const state = active(m, r);
   m.move(state, playerId, command, ctx);
   settle(m, r, state, ctx.now, true);
+}
+
+export function hostMatch<S, V>(m: GameModule<S, V>, r: MatchRoom, command: Command, ctx: MatchContext) {
+  const state = active(m, r);
+  m.host!.move(state, command, ctx);
+  settle(m, r, state, ctx.now, true);
+}
+
+function active<S, V>(m: GameModule<S, V>, r: MatchRoom) {
+  const state = matchOf(m, r);
+  if (!state || r.phase !== 'playing') throw new GameError(games[m.game].name + ' is not active.', 409);
+  return state;
 }
 
 // When the engine next acts with no request: a bot's move, or the end of the turn. 0 when nothing is due.
@@ -144,5 +161,6 @@ function settle<S, V>(m: GameModule<S, V>, r: MatchRoom, state: S, now: number, 
     r.started = now;
     if (m.turnMs) r.deadline = now + m.turnMs;
   }
+  if (m.liveScores) for (const p of r.players) p.score = m.score(state, p.id);
   if (m.over(state)) endMatch(m, r);
 }

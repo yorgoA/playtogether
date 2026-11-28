@@ -25,7 +25,7 @@ import {
 import type { Question } from './trivia';
 import { botSeats, gameIds, type Difficulty, type RoomSnapshot } from '../contract';
 import { botColors, botLevel, botName } from './bots';
-import { claimPyramid, flipPyramid, newPyramid, pyramidView, resolvePyramid, type Pyramid } from './pyramid';
+import { pyramidModule, type Pyramid } from './pyramid';
 import {
   kingsMove,
   kingsOver,
@@ -43,13 +43,14 @@ import {
   endMatch,
   leaveMatch,
   matchWakes,
+  hostMatch,
   playMatch,
   startMatch,
   tickMatch,
   viewMatch,
   type MatchContext,
 } from './engine';
-import { activeModule, moduleForAction, moduleForGame, modules } from './modules';
+import { activeModule, moduleForAction, moduleForGame, moduleForHostAction, modules } from './modules';
 import { addTiebreak, totalRounds } from './rounds';
 import { bankLeft, islandMove, startIsland, totalPoints } from './island';
 import { active, goal, handSize, pointsFor, resources, type Island } from '../island/board';
@@ -261,7 +262,6 @@ function lobby(r: Room) {
   delete r.quiz;
   delete r.duel;
   delete r.island;
-  delete r.pyramid;
   delete r.kings;
   for (const m of modules) clearMatch(m, r);
   r.players.forEach((p) => {
@@ -311,12 +311,6 @@ function removePlayer(r: Room, p: Player, now: number) {
       return;
     }
   }
-  if (r.pyramid) {
-    const claim = r.pyramid.claim;
-    if (claim && (claim.from === p.id || claim.to === p.id)) r.pyramid.claim = null;
-    if (r.players.length < 2) r.phase = 'results';
-    return;
-  }
   if (r.kings) {
     leaveKings(r.kings, p.id);
     if (r.players.length < 2 || kingsOver(r.kings)) r.phase = 'results';
@@ -346,10 +340,6 @@ function start(r: Room, now: number, questions: Question[]) {
   const engine = moduleForGame(r.game);
   if (engine) {
     startMatch(engine, r, context(r, now));
-    return;
-  }
-  if (r.game === 'pyramid') {
-    r.pyramid = newPyramid(r.players.map((p) => p.id));
     return;
   }
   if (r.game === 'kings') {
@@ -454,21 +444,6 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
     if (!r.island || r.phase !== 'playing')
       throw new GameError(r.phase === 'paused' ? 'The game is paused.' : 'The match is not active.', 409);
     playIsland(r, player, command, now);
-  } else if ((action === 'pyramidClaim' || action === 'pyramidReply') && player) {
-    if (!r.pyramid || r.phase !== 'playing') throw new GameError('Pyramid is not active.', 409);
-    if (action === 'pyramidClaim') {
-      claimPyramid(
-        r.pyramid,
-        player.id,
-        command.target,
-        command.slot,
-        command.index,
-        r.players.filter((p) => connected(p, now)).map((p) => p.id),
-      );
-    } else {
-      const outcome = resolvePyramid(r.pyramid, player.id, command.call === true, command.index);
-      r.players.find((p) => p.id === outcome.loser)!.score -= outcome.points;
-    }
   } else if (action === 'kings' && player) {
     if (!r.kings || r.phase !== 'playing') throw new GameError('Kings Cup is not active.', 409);
     const poured = kingsMove(
@@ -505,6 +480,8 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
     if (!r.quiz || r.phase !== 'playing') throw new GameError('The quiz is not active.', 409);
     choosePower(r, player.id, command);
     hurryQuiz(r, (p) => connected(p as Player, now), now);
+  } else if (host && moduleForHostAction(action)) {
+    hostMatch(moduleForHostAction(action)!, r, command, context(r, now));
   } else if (host) {
     switch (action) {
       case 'addBot': {
@@ -550,10 +527,6 @@ export function mutate(r: Room, command: Command, token: string, now: number, qu
         if (r.phase !== 'lobby' && r.phase !== 'results')
           throw new GameError('A match is already in progress.');
         start(r, now, questions);
-        break;
-      case 'pyramidFlip':
-        if (!r.pyramid || r.phase !== 'playing') throw new GameError('Pyramid is not active.', 409);
-        if (flipPyramid(r.pyramid, command.index)) r.phase = 'results';
         break;
       case 'kingsNext':
         if (!r.kings || r.phase !== 'playing' || command.seq !== r.kings.seq)
@@ -643,7 +616,7 @@ export function snapshot(r: Room, now: number, token = ''): RoomSnapshot {
   const shotsShown = !r.duel || !!r.revealing;
   return {
     island,
-    pyramid: r.pyramid ? pyramidView(r.pyramid, viewer?.id) : undefined,
+    pyramid: viewMatch(pyramidModule, r, { id: viewer?.id, host }),
     kings: r.kings ? kingsView(r.kings) : undefined,
     storm: viewMatch(stormModule, r, { id: viewer?.id, host }),
     quiz: quiz?.view,
