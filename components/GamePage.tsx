@@ -17,7 +17,8 @@ export default function GamePage({game,viewer,favourite,onFavourite,onPlay,onBac
  const earned=viewer&&progress?.of===viewer.id?progress.earned:[];
  const all=gameAchievements(game.id,!!viewer?.adult),when=new Map(earned.map(e=>[e.id,e.earnedAt]));
  const got=all.filter(a=>when.has(a.id)).sort((a,b)=>when.get(b.id)!-when.get(a.id)!),left=all.filter(a=>!when.has(a.id)).sort((a,b)=>+!!a.secret-+!!b.secret);
- const shown=viewer?[...got,...left]:all.filter(a=>!a.secret);
+ // Guests see how many there are, but not the achievements themselves, until they sign in.
+ const shown=viewer?[...got,...left]:[];
  const words=game.name.split(' ');
  return <div className="gamePage">
   <section className={'gameHero hero-'+game.art} style={{backgroundImage:'url(/art/'+game.art+(game.group==='After hours'||game.art==='storm'?'.svg)':'.webp)')}}>
@@ -29,7 +30,7 @@ export default function GamePage({game,viewer,favourite,onFavourite,onPlay,onBac
     <p>{game.description}</p>
     <div className="actions">
      {game.live?<button ref={first} className="primary" data-remote-start onClick={onPlay}><Play fill="currentColor"/>Play</button>:<strong className="coming">Coming soon</strong>}
-     <button ref={game.live?undefined:first} className="secondary favoriteBtn" aria-pressed={favourite} onClick={onFavourite}><Heart fill={favourite?'currentColor':'none'}/>{favourite?'In your favourites':'Add to favourites'}</button>
+     <button ref={game.live?undefined:first} className="secondary favoriteBtn" aria-pressed={favourite} onClick={onFavourite}><Heart fill={favourite?'currentColor':'none'}/>{favourite?'Remove from favourites':'Add to favourites'}</button>
     </div>
    </div>
   </section>
@@ -47,18 +48,17 @@ export default function GamePage({game,viewer,favourite,onFavourite,onPlay,onBac
    {all.length>0&&<section className="gameAchievements" aria-labelledby="game-achievements">
     <div className="achTop">
      <h2 id="game-achievements"><Trophy/>Achievements</h2>
-     {viewer?<span className="achCount"><b>{got.length}</b> of {all.length}</span>:<span className="achCount">{all.length} to earn</span>}
+     {viewer?<span className="achCount"><b>{got.length}</b> of {all.length}</span>:<span className="achCount">{all.length} achievements</span>}
     </div>
     {viewer?<div className="achBar" role="progressbar" aria-label="Achievements earned" aria-valuemin={0} aria-valuemax={all.length} aria-valuenow={got.length}><i style={{width:got.length/all.length*100+'%'}}/></div>
-     :<div className="achGuest"><p>Sign in to keep track of your achievements.</p><button className="secondary" onClick={onSignIn}>Sign in</button></div>}
-    <ul>{shown.map(a=>{const at=when.get(a.id),locked=a.secret&&at===undefined;
+     :<div className="achGuest"><p>Sign in to see them and keep track of your achievements.</p><button className="secondary" onClick={onSignIn}>Sign in</button></div>}
+    {shown.length>0&&<ul>{shown.map(a=>{const at=when.get(a.id),locked=a.secret&&at===undefined;
      return <li key={a.id} tabIndex={0} className={at!==undefined?'earned':locked?'locked':''}>
       <span className="achIcon" aria-hidden>{at!==undefined?<Trophy/>:<Lock/>}</span>
       {locked?<div><h3>Secret achievement</h3><p>Keep playing to find it.</p></div>
        :<div><h3>{a.name}{a.funny&&<span className="achTag">Funny</span>}</h3><p>{a.how}</p></div>}
       <span className="achWhen">{at!==undefined?'Earned '+day(at):locked?'Locked':'Not earned yet'}</span>
-     </li>})}</ul>
-    {!viewer&&all.some(a=>a.secret)&&<p className="achMore">{all.filter(a=>a.secret).length} secret achievements to discover.</p>}
+     </li>})}</ul>}
    </section>}
   </div>
  </div>;

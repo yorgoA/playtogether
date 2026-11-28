@@ -44,7 +44,6 @@
 .achWhen{font-size:13px;color:var(--muted);white-space:nowrap}
 .earned .achWhen{color:var(--lime)}
 .achTag{font:700 10px 'Courier New',monospace;letter-spacing:1px;text-transform:uppercase;color:#f3c4ff;background:#3a2442;border-radius:5px;padding:3px 6px}
-.achMore{margin:14px 0 0;color:var(--muted);font-size:14px}
 @media (max-width:900px){
  .gameBody{grid-template-columns:1fr}
  .gameHero{min-height:62vh}
@@ -57,5 +56,5 @@
 /* TV: the page sits inside .hub, so it shares the hub's --tv size. */
 @media (min-width:1600px){
  .gamePage :is(.gameHero p,.gameInfo ol,.gameInfo dd,.gameAchievements li h3){font-size:calc(var(--tv)*1.1)}
- .gamePage :is(.gameBack,.kicker,.primary,.secondary,.gameInfo dt,.gameAchievements li p,.achWhen,.achGuest p,.achMore,.gameInfo h3){font-size:var(--tv)}
+ .gamePage :is(.gameBack,.kicker,.primary,.secondary,.gameInfo dt,.gameAchievements li p,.achWhen,.achGuest p,.gameInfo h3){font-size:var(--tv)}
 }
