@@ -21,7 +21,7 @@ export const contends = (r: { contenders?: string[] }, id: string) =>
   !r.contenders || r.contenders.includes(id);
 
 // The players tied for first place, or none when one leads. Only contenders count once a tie-break started.
-export function tiedForFirst(r: RoundRoom) {
+function tiedForFirst(r: RoundRoom) {
   const field = r.players.filter((p) => contends(r, p.id));
   const top = Math.max(...field.map((p) => p.score));
   const tied = field.filter((p) => p.score === top);

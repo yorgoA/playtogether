@@ -5,7 +5,7 @@ export const highest = 8;
 export const stormLimit = 5;
 export const isPower = (card: string) => card === 'G' || card === 'C';
 // Numbers run in a circle, so 8 and 1 are neighbours.
-export function neighbours(a: string, b: string) {
+function neighbours(a: string, b: string) {
   const gap = Math.abs(Number(a[1]) - Number(b[1]));
   return gap === 1 || gap === highest - 1;
 }
