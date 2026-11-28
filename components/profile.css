@@ -1,0 +1,62 @@
+.profilePage .brand{text-decoration:none;color:inherit}
+.pLogo{width:36px;height:36px;background:url(/favicon.svg) center/contain no-repeat}.profilePage a.primary{text-decoration:none}
+.profilePage .join svg{width:16px;height:16px}
+.pMain{max-width:980px;display:grid;gap:22px}
+.pHead{display:flex;gap:clamp(16px,3vw,32px);align-items:center;padding:8px 0}
+.pAvatar{font-size:clamp(56px,7vw,96px);line-height:1;display:grid;place-items:center;width:1.5em;height:1.5em;border-radius:50%;background:var(--surface);border:1px solid var(--line);flex-shrink:0}
+.pHead h1{margin:0;font-size:clamp(30px,3.4vw,52px);letter-spacing:-.04em;line-height:1.05}
+.pHead h1 em{font-style:normal;color:var(--lime)}
+.pShare{margin:8px 0 14px;color:var(--muted)}
+.pRanks{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0}
+.pRanks li{display:flex;align-items:center;gap:7px;padding:8px 13px;border-radius:22px;background:#1a1b22;border:1px solid var(--line);color:#7d7e8c;font-size:14px}
+.pRanks li svg{width:14px;height:14px}
+.pRanks li span{font:700 12px 'Courier New',monospace}
+.pRanks li.on{background:#272d22;border-color:#4b5a37;color:var(--lime)}
+.pSample{margin:0;padding:12px 16px;border-radius:10px;background:#2a2532;border:1px solid #534457;color:#ddd3e6;font-size:14px}
+.pBlock{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:clamp(18px,2.4vw,28px)}
+.pBlock h2{margin:0 0 14px;font-size:clamp(22px,2vw,30px);letter-spacing:-.03em}
+.pGuest h1{margin:0 0 8px}.pGuest p{color:var(--muted)}
+.pGame+.pGame{border-top:1px solid var(--line)}
+.pGameHead{width:100%;display:flex;align-items:center;gap:12px;padding:15px 6px;text-align:left;font-size:17px;font-weight:700;border-radius:8px}
+.pGameHead span{flex:1;display:flex;align-items:center;gap:8px}
+.pGameHead small{font:700 11px 'Courier New',monospace;color:#f3a4c4;border:1px solid #6b3d52;border-radius:5px;padding:2px 5px}
+.pGameHead b{font:700 14px 'Courier New',monospace;color:var(--lime);letter-spacing:.5px}
+.pGameHead svg{width:18px;height:18px;color:var(--muted);transition:transform .18s}
+.pGameHead[aria-expanded=true] svg{transform:rotate(180deg)}
+.pGameHead:hover{background:#22232c}
+.pList{list-style:none;margin:0 0 14px;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:10px}
+.pList li{display:flex;gap:12px;align-items:flex-start;padding:13px 14px;border-radius:11px;background:#14151b;border:1px solid #262731;color:#9c9daa}
+.pList li>svg{width:20px;height:20px;margin-top:2px;color:#5d5e6a}
+.pList li div{flex:1;min-width:0}
+.pList strong{display:block;color:#d2d2dc;font-size:15px}
+.pList p{margin:4px 0 0;font-size:13.5px;line-height:1.45}
+.pList time{font:700 11px 'Courier New',monospace;color:var(--muted);white-space:nowrap;margin-top:3px}
+.pList li.earned{background:#1d2419;border-color:#3e4c2f}
+.pList li.earned>svg{color:var(--lime)}
+.pList li.earned strong{color:#f4f4f8}
+.pList li.earned p{color:#c2c8b8}
+.pList li.secret{border-style:dashed}
+.pName{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.pName label{display:grid;gap:6px;flex:1 1 220px;color:var(--muted);font-size:14px}
+.pName input{color:white;background:#282932;border:1px solid #656575;border-radius:8px;padding:12px;font-size:16px}
+.pEmojis{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 12px}
+.pEmojis button{width:54px;height:54px;font-size:28px;border-radius:12px;background:#14151b;border:1px solid #33343f}
+.pEmojis button[aria-checked=true]{border-color:var(--lime);background:#272d22}
+.pEmojis .pPhoto{width:auto;padding:0 14px;font-size:14px;font-weight:700;display:inline-flex;align-items:center;gap:7px;color:#9c9daa}
+.pPhoto svg{width:17px;height:17px}
+.pBlock button[aria-disabled=true]{opacity:.5;cursor:default}.pBlock .primary[aria-disabled=true]:hover{background:var(--lime)}
+.pBlock .primary svg,.pBlock .secondary svg{width:17px;height:17px}
+.pNote{color:var(--muted);font-size:13.5px;line-height:1.5;margin:10px 0 0}
+.pDetails{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:10px;margin:0}
+.pDetails div{padding:12px 14px;border-radius:10px;background:#14151b;border:1px solid #262731}
+.pDetails dt{font:700 11px 'Courier New',monospace;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted)}
+.pDetails dd{margin:6px 0 0;font-size:16px;font-weight:650}
+.pDetails .pMissing{color:#7d7e8c;font-weight:500}
+.pBlock>.secondary{margin-top:16px;text-align:left}
+@media(max-width:750px){.pHead{flex-direction:column;text-align:center}.pRanks{justify-content:center}.pGameHead{font-size:16px}}
+@media(prefers-reduced-motion:reduce){.pGameHead svg{transition:none}}
+.pTabs{display:flex;gap:6px;border-bottom:1px solid var(--line);overflow-x:auto}
+.pTabs button{padding:13px 18px;font-size:16px;font-weight:700;color:#acaeba;border-bottom:3px solid transparent;margin-bottom:-1px;border-radius:8px 8px 0 0;white-space:nowrap}
+.pTabs button:hover{color:#f1f1f6;background:#1a1b22}
+.pTabs button[aria-selected=true]{color:var(--lime);border-bottom-color:var(--lime)}
+.pPanel{display:grid;gap:22px}

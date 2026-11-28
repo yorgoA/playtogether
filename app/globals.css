@@ -90,3 +90,4 @@
 .hub .shelf{padding:16px 14px 20px;margin:-11px -10px -8px}
 @media (prefers-reduced-motion:reduce){.hub .card:focus-visible,.hub .categoryNav a:focus-visible{transform:none}}
 .hub .favoriteBtn{margin-left:12px}.hub .favoriteBtn[aria-pressed=true]{color:var(--lime);border-color:var(--lime)}
+.profileActions{display:flex;flex-wrap:wrap;gap:10px}.profileActions a{text-decoration:none}
