@@ -18,7 +18,7 @@ export type Pyramid = {
   sips?: Record<string, number>;
 };
 
-export function newPyramid(players: string[]): Pyramid {
+function newPyramid(players: string[]): Pyramid {
   const deck = [...'A23456789TJQK'].flatMap((rank) => [...'SHDC'].map((suit) => rank + suit));
   for (let index = deck.length - 1; index > 0; index--) {
     const other = Math.floor(Math.random() * (index + 1));
