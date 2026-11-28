@@ -9,7 +9,7 @@ export const links = {
   slow: { oneWay: 220, jitter: 200, loss: 0.05 },
 } satisfies Record<string, Link>;
 
-export class Refused extends Error {
+class Refused extends Error {
   constructor(
     message: string,
     readonly status: number,
@@ -20,7 +20,7 @@ export class Refused extends Error {
 export class Lost extends Error {}
 
 export type Stats = { requests: number; lost: number; statuses: Record<string, number> };
-export const newStats = (): Stats => ({ requests: 0, lost: 0, statuses: {} });
+const newStats = (): Stats => ({ requests: 0, lost: 0, statuses: {} });
 
 // A phone (or the host screen) that behaves like `useRoom` and `useSignal` in lib/controller/room.ts.
 // Keep the two in step when the polling or clock rules there change.
@@ -184,7 +184,8 @@ async function adultCookie(world: World) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       action: 'register',
-      name: 'Sim ' + Math.floor(world.now() + world.random() * 1e9).toString(36),
+      // Not from the seeded world: two live matches with the same seed would pick the same name at once.
+      name: 'Sim ' + crypto.randomUUID().slice(0, 8),
       password: 'only for simulations',
       birthday: '1990-01-01',
     }),

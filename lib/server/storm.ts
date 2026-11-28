@@ -18,7 +18,7 @@ export type Storm = {
   stuck: number;
   event: StormView['event'];
 };
-export const handStart = 7;
+const handStart = 7;
 export const turnMs = 40_000;
 
 function shuffle(cards: string[]) {
@@ -128,7 +128,7 @@ export function stormMove(s: Storm, id: string, command: Record<string, unknown>
 }
 
 // Plays for someone who ran out of time.
-export function stormTimeout(s: Storm) {
+function stormTimeout(s: Storm) {
   if (s.streak === null) drawCard(s);
   else pass(s);
   s.seq++;
@@ -138,9 +138,9 @@ export const stormOver = (s: Storm) =>
   s.order.length < 2 || s.order.some((id) => !s.hands[id].length) || s.stuck >= s.order.length;
 
 // Ten points for emptying your hand, and one fewer for every card left in it.
-export const stormScore = (s: Storm, id: string) => Math.max(0, 10 - (s.hands[id]?.length ?? 10));
+const stormScore = (s: Storm, id: string) => Math.max(0, 10 - (s.hands[id]?.length ?? 10));
 
-export function leaveStorm(s: Storm, id: string) {
+function leaveStorm(s: Storm, id: string) {
   if (s.turn === id) pass(s);
   s.order = s.order.filter((other) => other !== id);
   s.spent.push(...(s.hands[id] ?? []));
