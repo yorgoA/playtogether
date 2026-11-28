@@ -184,7 +184,8 @@ async function adultCookie(world: World) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       action: 'register',
-      name: 'Sim ' + Math.floor(world.now() + world.random() * 1e9).toString(36),
+      // Not from the seeded world: two live matches with the same seed would pick the same name at once.
+      name: 'Sim ' + crypto.randomUUID().slice(0, 8),
       password: 'only for simulations',
       birthday: '1990-01-01',
     }),
