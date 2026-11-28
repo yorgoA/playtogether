@@ -1,5 +1,5 @@
 // The most a request body may hold, in bytes. Every real request is far smaller.
-export const maxBody = 2500;
+const maxBody = 2500;
 
 // Reads a body as text, or gives null as soon as it passes `limit` bytes, without reading the rest.
 export async function readText(req: Request, limit = maxBody): Promise<string | null> {

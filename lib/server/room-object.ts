@@ -99,7 +99,8 @@ export class RoomObject extends DurableObject {
     } catch {}
     const checked = LiveHello.safeParse(hello);
     if (!r || !checked.success || !knows(r, checked.data.token)) {
-      ws.send(JSON.stringify({ error: r ? 'Join this room first.' : 'Room code not found.' }));
+      // One reply whether the room exists or not, so a socket cannot be used to guess codes.
+      ws.send(JSON.stringify({ error: 'Join this room first.' }));
       ws.close(4003, 'Not in this room');
       return;
     }
