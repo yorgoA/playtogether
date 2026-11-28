@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const rooms = sqliteTable(
   'rooms',
@@ -31,6 +31,31 @@ export const profileSessions = sqliteTable(
     expires: integer('expires').notNull(),
   },
   (t) => [index('profile_sessions_expires_idx').on(t.expires)],
+);
+
+// Achievements belong to the account: each is earned once, in the game named, when a match ends.
+export const achievements = sqliteTable(
+  'achievements',
+  {
+    profileId: text('profile_id')
+      .notNull()
+      .references(() => profiles.id),
+    achievementId: text('achievement_id').notNull(),
+    game: text('game').notNull(),
+    earnedAt: integer('earned_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.profileId, t.achievementId] })],
+);
+
+export const favourites = sqliteTable(
+  'favourites',
+  {
+    profileId: text('profile_id')
+      .notNull()
+      .references(() => profiles.id),
+    game: text('game').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.profileId, t.game] })],
 );
 
 // Counts attempts per key (a name or an address) until `resetAt`, to slow down guessing.

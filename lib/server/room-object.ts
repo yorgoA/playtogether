@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
+import { award, ended } from './achievements';
 import { LiveHello } from '../contract';
 import { GameError } from './games';
 import {
@@ -56,9 +57,11 @@ export class RoomObject extends DurableObject {
       return { status: 200, body: {}, questions: true };
     this.sweep(now);
     const here = stillHere(r, this.tokens(now), now);
+    const before = r.phase;
     try {
       const { dirty, extras } = mutate(r, command, token, now, questions, joiner);
       if (dirty || here) await this.save(r, now);
+      if (ended(before, r)) await award(r, now);
       return { status: 200, body: { ...extras, room: snapshot(r, now, extras.playerToken || token) } };
     } catch (e) {
       if (here) await this.save(r, now);
@@ -79,8 +82,11 @@ export class RoomObject extends DurableObject {
       // The room wakes every ping window while sockets are open, so fresher presence alone is not saved:
       // the next call works it out again from the sockets.
       stillHere(r, this.tokens(now), now);
-      if (tick(r, now)) await this.save(r, now);
-      else {
+      const before = r.phase;
+      if (tick(r, now)) {
+        await this.save(r, now);
+        if (ended(before, r)) await award(r, now);
+      } else {
         // Nothing to save, but who is connected may have changed: wake for what comes next and show it.
         await this.wake(r, now, (await this.ctx.storage.get<number>('expires'))!);
         this.show(r, now);

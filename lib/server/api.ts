@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { adultGames, CreateRoomRequest, gameIds, RoomCommand } from '../contract';
+import { award, ended } from './achievements';
 import { readText } from './body';
 import { GameError } from './games';
 import { current, publicProfile } from './profiles';
@@ -127,6 +128,7 @@ export async function handle(req: Request, rawCode: string) {
         // Fetching takes a moment, so look at the room again.
         continue;
       }
+      const before = r.phase;
       const { dirty, extras } = mutate(r, command, token, now, questions, joiner);
       if (dirty) {
         const result = await store
@@ -134,6 +136,7 @@ export async function handle(req: Request, rawCode: string) {
           .bind(JSON.stringify(r), now + ttl, code, row.version)
           .run();
         if (!result.meta.changes) continue;
+        if (ended(before, r)) await award(r, now);
       }
       return reply({ ...extras, room: snapshot(r, now, extras.playerToken || token) });
     }
