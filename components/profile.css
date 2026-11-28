@@ -55,3 +55,8 @@
 .pBlock>.secondary{margin-top:16px;text-align:left}
 @media(max-width:750px){.pHead{flex-direction:column;text-align:center}.pRanks{justify-content:center}.pGameHead{font-size:16px}}
 @media(prefers-reduced-motion:reduce){.pGameHead svg{transition:none}}
+.pTabs{display:flex;gap:6px;border-bottom:1px solid var(--line);overflow-x:auto}
+.pTabs button{padding:13px 18px;font-size:16px;font-weight:700;color:#acaeba;border-bottom:3px solid transparent;margin-bottom:-1px;border-radius:8px 8px 0 0;white-space:nowrap}
+.pTabs button:hover{color:#f1f1f6;background:#1a1b22}
+.pTabs button[aria-selected=true]{color:var(--lime);border-bottom-color:var(--lime)}
+.pPanel{display:grid;gap:22px}
