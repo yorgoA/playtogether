@@ -11,6 +11,7 @@ import {
   CreateRoomResponse,
   ErrorResponse,
   ProfileRequest,
+  ProgressRequest,
   ProfileResponse,
   RoomCommand,
   RoomResponse,
@@ -82,6 +83,8 @@ describe('what the screens send is accepted', () => {
     { action: 'changePassword', password: 'correct horse', newPassword: 'another one' },
     { action: 'deleteAccount', password: 'correct horse' },
   ])('profile request %j', (body) => fits(ProfileRequest, body));
+  it('favourite request', () =>
+    fits(ProgressRequest, { action: 'favourite', game: 'quiz', favourite: true }));
 });
 
 describe('malformed requests are refused with the field named', () => {

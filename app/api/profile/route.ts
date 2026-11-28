@@ -109,6 +109,8 @@ export async function POST(req: Request) {
     if (data.action === 'deleteAccount') {
       await env.DB.batch([
         env.DB.prepare('DELETE FROM profile_sessions WHERE profile_id=?').bind(who.id),
+        env.DB.prepare('DELETE FROM achievements WHERE profile_id=?').bind(who.id),
+        env.DB.prepare('DELETE FROM favourites WHERE profile_id=?').bind(who.id),
         env.DB.prepare('DELETE FROM profiles WHERE id=?').bind(who.id),
       ]);
       return reply({ profile: null }, 200, signedOut(req));
