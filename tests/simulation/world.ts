@@ -14,7 +14,7 @@ export type World = {
 };
 
 // Repeatable randomness, so a failing run can be replayed from its seed.
-export function seeded(seed: number) {
+function seeded(seed: number) {
   return () => {
     seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);

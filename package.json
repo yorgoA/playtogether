@@ -18,14 +18,15 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write app/api lib/server lib/island db tests scripts/check-migrations.mjs scripts/check-worker-size.mjs vitest.config.ts vite.config.ts drizzle.config.ts",
     "format:check": "prettier --check app/api lib/server lib/island db tests scripts/check-migrations.mjs scripts/check-worker-size.mjs vitest.config.ts vite.config.ts drizzle.config.ts",
-    "check": "npm run lint && npm run format:check && npm run typecheck && npm run db:verify && npm test && npm run build && npm run size",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm run knip && npm run db:verify && npm run test:coverage && npm run build && npm run size",
     "db:verify": "drizzle-kit check && node scripts/check-migrations.mjs",
+    "knip": "knip --no-progress",
     "size": "node scripts/check-worker-size.mjs",
+    "test:coverage": "vitest run --coverage",
     "test:live": "vitest run tests/simulation/live.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
-    "@hookform/resolvers": "^5.7.1",
     "@react-three/fiber": "^9.8.2",
     "@shadcn/react": "^0.3.1",
     "class-variance-authority": "0.7.1",
@@ -61,9 +62,11 @@
     "@types/three": "^0.187.0",
     "@vitejs/plugin-react": "6.3.0",
     "@vitejs/plugin-rsc": "0.5.39",
+    "@vitest/coverage-v8": "5.1.2",
     "drizzle-kit": "0.31.11",
     "eslint": "9.39.4",
     "eslint-config-next": "16.4.6",
+    "knip": "6.48.0",
     "prettier": "3.10.1",
     "react-server-dom-webpack": "19.3.1",
     "tailwindcss": "4.3.5",
@@ -77,7 +80,7 @@
   "type": "module",
   "overrides": {
     "miniflare": {
-      "sharp": "0.35.4"
+      "sharp": "0.35.5"
     }
   }
 }

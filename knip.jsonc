@@ -1,0 +1,23 @@
+// knip finds files, exports and dependencies nothing uses. `npm run knip`, also run by `npm run check` and CI.
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "scripts/*.mjs",
+    // Only `tsc` reads it: it proves the screens' types match the contract.
+    "tests/contract-types.ts",
+    // The shadcn kit is vendored whole on purpose (see eslint.config.mjs), used or not.
+    "components/ui/**/*.tsx"
+  ],
+  "ignore": ["vendor/**", "examples/**"],
+  // Loaded by the PostCSS and CSS setup, which knip does not read.
+  "ignoreDependencies": ["tailwindcss", "tw-animate-css"],
+  // A system tool `npm run dev:https` calls.
+  "ignoreBinaries": ["openssl"],
+  "ignoreIssues": {
+    // The contract and the board are what the screens import: an export unused today stays.
+    "lib/contract/**": ["exports", "types"],
+    "lib/island/board.ts": ["exports", "types"],
+    // The screens' own exports are for Yorgo to tidy: reported in the pull request, not blocking.
+    "components/**": ["exports", "types"]
+  }
+}

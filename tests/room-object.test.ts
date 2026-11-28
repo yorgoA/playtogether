@@ -120,6 +120,12 @@ describe('room in a Durable Object', () => {
     const stranger = await socket('not-a-token');
     expect(stranger.last()).toEqual({ error: 'Join this room first.' });
     expect(stranger.closed).toBe(4003);
+    // A code with no room answers the same, so a socket tells nothing about which codes exist.
+    const nowhere = new RoomObject(fakeState().state as never, {} as never);
+    const guess = new FakeSocket();
+    await nowhere.webSocketMessage(guess as never, JSON.stringify({ token: 'not-a-token' }));
+    expect(guess.last()).toEqual(stranger.last());
+    expect(guess.closed).toBe(4003);
     const ana = await join('Ana');
     const ws = await socket(ana.playerToken);
     const r = stored();

@@ -1,3 +1,9 @@
+## Issue
+
+Closes #
+
+<!-- The issue this finishes. Use "Part of #" when more pull requests follow, or "None" for a small chore. -->
+
 ## Why
 
 <!-- The problem or the goal, in one or two sentences. -->
