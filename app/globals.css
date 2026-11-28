@@ -82,3 +82,10 @@
   .hub .dialogContent :is(p, li, h3), .hub .profileForm { font-size: var(--tv); }
   .hub .close { width: calc(var(--tv) * 2.1); height: calc(var(--tv) * 2.1); }
 }
+/* TV remote: the focused card or category grows and gets a thick ring, so it can be seen from a sofa. */
+.hub .card:focus-visible{outline:4px solid var(--lime);outline-offset:3px;transform:scale(1.04);border-color:var(--lime)}
+.hub .categoryNav a:focus-visible{outline:4px solid var(--lime);outline-offset:3px;transform:scale(1.03)}
+.hub .categoryNav a{transition:transform .18s}
+/* Room for the grown card, since a row that scrolls sideways clips what spills out of it. */
+.hub .shelf{padding:16px 14px 20px;margin:-11px -10px -8px}
+@media (prefers-reduced-motion:reduce){.hub .card:focus-visible,.hub .categoryNav a:focus-visible{transform:none}}

@@ -5,6 +5,7 @@ import {games,type Game} from '../lib/catalog';
 import GameSession from '../components/GameSession';
 import HubProfile, {type Viewer} from '../components/HubProfile';
 import AfterHours from '../components/AfterHours';
+import {useRemote} from '../lib/controller/remote';
 const categories = [
   { id: 'party', title: 'Party', art: 'party' },
   { id: 'board-strategy', title: 'Board & strategy', art: 'settlers' },
@@ -23,7 +24,8 @@ export default function Home(){
  useEffect(()=>{if(paused||heroFocus||detail||help||profileOpen||playing||view!=='Home')return;const timer=setInterval(()=>{if(!document.hidden)setIndex(i=>(i+1)%3)},5000);return ()=>clearInterval(timer)},[paused,heroFocus,detail,help,profileOpen,playing,view,index]);
  function favorite(g:Game){const next=favorites.includes(g.id)?favorites.filter(id=>id!==g.id):[...favorites,g.id];setFavorites(next);localStorage.setItem(prefix+'-favorites',JSON.stringify(next))}
  function close(){setDetail(null);setHelp(false);setProfileOpen(false)}
- useEffect(()=>{function key(e:KeyboardEvent){if(!['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.key)||['INPUT','SELECT','TEXTAREA'].includes((e.target as HTMLElement).tagName))return;const parent=document.querySelector('dialog[open]')||document;const els=Array.from(parent.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],select')).filter(el=>el.offsetWidth&&el.offsetHeight);const cur=document.activeElement as HTMLElement;if(!els.includes(cur)){els[0]?.focus();return}const r=cur.getBoundingClientRect(),cx=r.x+r.width/2,cy=r.y+r.height/2;const horizontal=/Left|Right/.test(e.key),sign=/Right|Down/.test(e.key)?1:-1;const matches=els.map(el=>{const q=el.getBoundingClientRect(),x=q.x+q.width/2-cx,y=q.y+q.height/2-cy;const d=(horizontal?x:y)*sign,s=Math.abs(horizontal?y:x);return {el,d,s}}).filter(a=>a.d>4).sort((a,b)=>(a.d+a.s*4)-(b.d+b.s*4));if(matches[0]){e.preventDefault();matches[0].el.focus()}}document.addEventListener('keydown',key);return()=>document.removeEventListener('keydown',key)},[]);
+ // Back on the remote closes a dialog, leaves a game, or returns to Home.
+ useRemote(()=>{if(detail||help||profileOpen)close();else if(playing)setPlaying('');else if(view!=='Home')nav('Home')});
  function play(g:Game){setDetail(null);const arr=[g.id,...recent.filter(k=>k!==g.id)].slice(0,8);setRecent(arr);localStorage.setItem(prefix+'-recent',JSON.stringify(arr));setPlaying(g.id)}
  function nav(v:string){setView(v);setQuery('');window.scrollTo(0,0)}
  if(playing)return <GameSession game={playing} onExit={()=>setPlaying('')}/>;
@@ -41,7 +43,7 @@ export default function Home(){
      <p>{game.description}</p>
      <Meta g={game}/>
      <div className="actions">
-       {game.live&&<button className="primary" onClick={()=>play(game)}><Play fill="currentColor"/>Play now</button>}
+       {game.live&&<button className="primary" data-remote-start onClick={()=>play(game)}><Play fill="currentColor"/>Play now</button>}
        <button className="secondary" onClick={()=>setDetail(game)}><Info/>Game details</button>
      </div>
    </div>)}
