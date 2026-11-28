@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { RoomResponse } from '../lib/contract';
 import { GET as roomRoute, POST as roomPost } from '../app/api/rooms/[code]/route';
 import { POST as createRoute } from '../app/api/rooms/route';
 import { get, json, post } from './api-helpers';
@@ -65,6 +66,40 @@ describe('rooms', () => {
     const stale = await send(code, { action: 'storm', move: 'draw', seq: 0 }, other.playerToken);
     expect(stale.error).toBe('The table has moved on.');
   });
+  it('asks the host before handing a seat, and its hidden hand, to another phone mid-match', async () => {
+    const { code, hostToken } = await newRoom('storm');
+    const seats = [];
+    for (const [name, joinId] of [
+      ['Ana', 'ana-first-phone-01'],
+      ['Bo', 'bo-first-phone-001'],
+    ]) {
+      const joined = await send(code, { action: 'join', name, joinId });
+      await send(code, { action: 'ready', ready: true }, joined.playerToken);
+      seats.push(joined);
+    }
+    await send(code, { action: 'start' }, hostToken);
+    // Ana's phone goes quiet.
+    const stored = JSON.parse((sqlite.prepare('SELECT state FROM rooms').get() as { state: string }).state);
+    stored.players[0].lastSeen = 0;
+    sqlite.prepare('UPDATE rooms SET state = ?').run(JSON.stringify(stored));
+    const asking = await send(code, { action: 'join', name: 'Ana', joinId: 'ana-second-phone-2' });
+    expect(RoomResponse.parse(asking)).toMatchObject({ pending: true });
+    expect(asking.playerToken).toBeUndefined();
+    expect(asking.room.storm.hand).toBeUndefined();
+    const { room } = RoomResponse.parse(await json(await view(code, hostToken)));
+    expect(asking.claimCode).toMatch(/^[A-Z2-9]{4}$/);
+    expect(room.claims).toEqual([
+      { id: expect.any(String), seat: seats[0].playerId, avatar: '🎮', code: asking.claimCode },
+    ]);
+    const answer = { action: 'claim', id: room.claims[0].id, accept: true };
+    expect((await send(code, answer, seats[1].playerToken)).error).toMatch(/host/);
+    await send(code, answer, hostToken);
+    const back = await send(code, { action: 'join', name: 'Ana', joinId: 'ana-second-phone-2' });
+    expect(back.playerId).toBe(seats[0].playerId);
+    expect(back.room.storm.hand).toHaveLength(7);
+    expect((await view(code, seats[0].playerToken)).status).toBe(403);
+  });
+
   it('keeps secrets out of what a player can read', async () => {
     const { code, hostToken } = await newRoom();
     const joined = await send(code, { action: 'join', name: 'Ana' });

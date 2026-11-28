@@ -125,6 +125,8 @@ const hostCommands = [
   nothing('lobby'),
   nothing('end'),
   z.object({ action: z.literal('configure'), game: Game.optional(), rounds: z.number().int().min(1).max(10).optional() }),
+  // Answers a phone asking for a seat back mid-match, from the snapshot's `claims`.
+  z.object({ action: z.literal('claim'), id: z.string().max(60), accept: z.boolean() }),
   z.object({ action: z.literal('kick'), playerId: z.string().max(60) }),
   z.object({ action: z.literal('standIn'), playerId: z.string().max(60) }),
 ] as const;
@@ -338,6 +340,12 @@ contenders: z.array(z.string()),
     // Recent reactions, numbered so a screen shows each one once.
     cheers: z.array(z.object({ n: z.number().int(), from: z.string(), emoji: z.string() }).strict()),
     players: z.array(Player),
+    // Phones asking for a seat back mid-match. Only the host screen sees them. `seat` is a player id, `avatar`
+    // the one the asking phone sent, and `code` the one that phone shows (`claimCode` in its join reply), so
+    // the host can check whose request it is: an avatar can be copied, a code cannot.
+    claims: z.array(
+      z.object({ id: z.string(), seat: z.string(), avatar: z.string(), code: z.string() }).strict(),
+    ),
   })
   .strict();
 export type RoomSnapshot = z.infer<typeof RoomSnapshot>;
@@ -348,5 +356,13 @@ export const CreateRoomResponse = z
   .strict();
 // 200 for GET and POST /api/rooms/:code. `playerId` and `playerToken` come back only from `join`.
 export const RoomResponse = z
-  .object({ room: RoomSnapshot, playerId: z.string().optional(), playerToken: z.string().optional() })
+  .object({
+    room: RoomSnapshot,
+    playerId: z.string().optional(),
+    playerToken: z.string().optional(),
+    // A join for a seat taken mid-match: the host has yet to agree. Repeat the join with the same `joinId`.
+    pending: z.literal(true).optional(),
+    // With `pending`: the code to show on the waiting phone, which the host sees beside the request.
+    claimCode: z.string().optional(),
+  })
   .strict();

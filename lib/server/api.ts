@@ -97,7 +97,7 @@ export async function handle(req: Request, rawCode: string) {
         // Fetching takes a moment, so look at the room again.
         continue;
       }
-      const { dirty, extras } = mutate(r, command, token, now, questions);
+      const { dirty, extras, pending } = mutate(r, command, token, now, questions);
       if (dirty) {
         const result = await store
           .prepare('UPDATE rooms SET state=?, version=version+1, expires=? WHERE code=? AND version=?')
@@ -105,7 +105,11 @@ export async function handle(req: Request, rawCode: string) {
           .run();
         if (!result.meta.changes) continue;
       }
-      return reply({ ...extras, room: snapshot(r, now, extras.playerToken || token) });
+      return reply({
+        ...extras,
+        ...(pending && { pending }),
+        room: snapshot(r, now, extras.playerToken || token),
+      });
     }
     throw new GameError('The room is busy. Try again.', 409);
   } catch (e) {
