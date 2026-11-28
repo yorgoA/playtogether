@@ -1,5 +1,6 @@
 import type { KingsView } from '../contract';
 import { cupSips } from '../kings/rules';
+import type { GameModule } from './engine';
 import { GameError } from './games';
 
 export type Kings = {
@@ -24,6 +25,8 @@ export type Kings = {
   times?: Record<string, number>;
   // Presses already counted.
   presses?: string[];
+  // The sips each player drank. Matches started before it was kept have none and count from 0.
+  sips?: Record<string, number>;
 };
 // How long the last phone may take after everyone else has tapped.
 export const raceGraceMs = 3000;
@@ -31,7 +34,7 @@ export const raceGraceMs = 3000;
 const raceAllowanceMs = 3000;
 type Pour = { drinkers: string[]; amount: number } | null;
 
-export function newKings(players: string[]): Kings {
+function newKings(players: string[]): Kings {
   const deck = [...'A23456789TJQK'].flatMap((rank) => [...'SHDC'].map((suit) => rank + suit));
   for (let index = deck.length - 1; index > 0; index--) {
     const other = Math.floor(Math.random() * (index + 1));
@@ -111,7 +114,7 @@ function draw(board: Kings, player: string, slot: unknown, connected: string[], 
   }
 }
 
-export function kingsMove(
+function kingsMove(
   board: Kings,
   player: string,
   command: Record<string, unknown>,
@@ -191,19 +194,19 @@ function finishRace(board: Kings): Pour {
   return pour(board, losers, 1);
 }
 // Ends a race whose last player ran out of time.
-export function settleRace(board: Kings, now: number): Pour {
+function settleRace(board: Kings, now: number): Pour {
   if (board.phase !== 'race' || board.raceUntil === undefined || now < board.raceUntil) return null;
   return finishRace(board);
 }
-export function resumeKings(board: Kings, delta: number) {
+function resumeKings(board: Kings, delta: number) {
   if (board.raceAt !== undefined) board.raceAt += delta;
   if (board.raceUntil !== undefined) board.raceUntil += delta;
 }
 
 // Once the fourth king has been drunk the game is over.
-export const kingsOver = (board: Kings) => board.kings === 4 && board.phase === 'draw';
+const kingsOver = (board: Kings) => board.kings === 4 && board.phase === 'draw';
 
-export function nextKings(board: Kings) {
+function nextKings(board: Kings) {
   board.turn = (board.turn + 1) % board.order.length;
   clearCard(board);
 }
@@ -216,7 +219,7 @@ function clearCard(board: Kings) {
   board.tapped = [];
 }
 
-export function leaveKings(board: Kings, player: string) {
+function leaveKings(board: Kings, player: string) {
   const seat = board.order.indexOf(player);
   if (seat < 0) return;
   const current = seat === board.turn;
@@ -235,7 +238,7 @@ export function leaveKings(board: Kings, player: string) {
   if (board.phase !== 'race') board.raceUntil = undefined;
 }
 
-export function kingsView(board: Kings): KingsView {
+function kingsView(board: Kings): KingsView {
   const { left, order, seq, phase, card, slot, racers, tapped, mates, master, rules, kings, event } = board;
   return {
     left,
@@ -254,3 +257,40 @@ export function kingsView(board: Kings): KingsView {
     event,
   };
 }
+
+function drink(board: Kings, poured: Pour) {
+  if (!poured) return;
+  const sips = { ...board.sips };
+  for (const id of poured.drinkers) sips[id] = (sips[id] ?? 0) + poured.amount;
+  board.sips = sips;
+}
+
+// Players draw in turn from the face-down ring; the host can move the table on. Scores are the sips drunk, as
+// negative points, shown while the match goes on. A race ends by itself once its last phone ran out of time.
+export const kingsModule: GameModule<Kings, KingsView> = {
+  game: 'kings',
+  action: 'kings',
+  key: 'kings',
+  liveScores: true,
+  start: (players) => newKings(players),
+  move: (board, playerId, command, ctx) =>
+    drink(board, kingsMove(board, playerId, command, ctx.connected, ctx.now)),
+  host: {
+    action: 'kingsNext',
+    move(board, command) {
+      if (command.seq !== board.seq) throw new GameError('The table has moved on.', 409);
+      nextKings(board);
+    },
+  },
+  wake: (board) => board.raceUntil ?? 0,
+  tick(board, ctx) {
+    const poured = settleRace(board, ctx.now);
+    drink(board, poured);
+    return !!poured;
+  },
+  resume: (board, ms) => resumeKings(board, ms),
+  leave: (board, playerId) => leaveKings(board, playerId),
+  over: (board) => kingsOver(board) || board.order.length < 2,
+  score: (board, playerId) => 0 - (board.sips?.[playerId] ?? 0),
+  view: (board) => kingsView(board),
+};
