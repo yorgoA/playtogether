@@ -66,6 +66,18 @@ describe('room limits', () => {
     expect(phone.status).toBe(200);
   });
 
+  it('give a made-up token the same answer for a real room and a wrong code, once guessing is blocked', async () => {
+    const code = await room();
+    const made = { ...home, authorization: 'Bearer made-up' };
+    // Before the block, a made-up token learns nothing new either: no seat and no room both fail.
+    for (let i = 0; i < 60; i++) expect((await view('ZZZZ', made)).status).toBe(404);
+    const real = await view(code, made);
+    const wrong = await view('ZZZY', made);
+    expect([real.status, wrong.status]).toEqual([429, 429]);
+    expect(await json(real)).toEqual(await json(wrong));
+    expectWait(real, 10);
+  });
+
   it('limit nothing on this machine, where there is no Cloudflare address', async () => {
     const code = await room();
     for (let i = 1; i <= 70; i++) expect((await join(code, 'Phone ' + i, {})).status).not.toBe(429);

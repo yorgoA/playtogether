@@ -36,12 +36,14 @@ async function action(req: Request) {
 }
 
 // GET and POST /api/rooms/:code: joins per address, and codes that lead nowhere, so codes cannot be guessed.
-// Screens already in a room send their token and only meet the join limit, so a guesser never blocks them.
+// Once an address is blocked, a request with a token still goes through, but only a 200 comes back as it is:
+// a wrong code and a made-up token both get the same 429, while screens already in a room keep playing.
 export async function limitRoom(req: Request, handle: () => Promise<Response>) {
   const address = client(req);
   if (local(address)) return handle();
   const misses = 'rooms:unknown:' + address;
-  if (!req.headers.get('authorization')) {
+  const anonymous = !req.headers.get('authorization');
+  if (anonymous) {
     const wait = await exhausted(misses, unknownCodesPerWindow);
     if (wait) return tooMany('wrong room codes', wait);
   }
@@ -50,6 +52,12 @@ export async function limitRoom(req: Request, handle: () => Promise<Response>) {
     if (!allowed) return tooMany('joins', retryAfter);
   }
   const res = await handle();
+  // Polls that succeed cost no extra read.
+  if (res.status === 200) return res;
+  if (!anonymous) {
+    const wait = await exhausted(misses, unknownCodesPerWindow);
+    if (wait) return tooMany('wrong room codes', wait);
+  }
   if (res.status === 404) await hit(misses, unknownCodesPerWindow, window);
   return res;
 }
